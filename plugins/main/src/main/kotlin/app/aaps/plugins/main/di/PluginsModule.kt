@@ -16,6 +16,7 @@ import dagger.android.ContributesAndroidInjector
         PluginsModule.Bindings::class,
         FoodModule::class,
         SMSCommunicatorModule::class,
+        NFCCommandsModule::class,
         ProfileModule::class,
         ProfileModule.Bindings::class,
         SkinsModule::class,
