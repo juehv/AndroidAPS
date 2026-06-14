@@ -10,7 +10,8 @@ import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.keys.BooleanKey
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions
@@ -30,14 +31,24 @@ class PoctechWorkerTest : TestBaseWithProfile() {
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var workerParameters: WorkerParameters
 
+    init {
+        addInjector { injector ->
+            if (injector is PoctechPlugin.PoctechWorker) {
+                injector.aapsLogger = aapsLogger
+                injector.poctechPlugin = poctechPlugin
+                injector.persistenceLayer = persistenceLayer
+            }
+        }
+    }
+
     @BeforeEach
     fun setupMock() {
-        worker = PoctechPlugin.PoctechWorker(context, workerParameters, aapsLogger, fabricPrivacy, poctechPlugin, persistenceLayer)
+        worker = PoctechPlugin.PoctechWorker(context, workerParameters)
     }
 
     @Test
     fun `When plugin disabled then return success`() {
-        runTest {
+        runBlocking {
             whenever(poctechPlugin.isEnabled()).thenReturn(false)
 
             val result = worker.doWork()
@@ -50,10 +61,10 @@ class PoctechWorkerTest : TestBaseWithProfile() {
     @Test
     fun `When plugin enabled then insert mmol data`() {
         val timestamp = (now - 60000)
-        runTest {
+        runBlocking {
             whenever(poctechPlugin.isEnabled()).thenReturn(true)
             whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
             whenever(workerParameters.inputData).thenReturn(
                 workDataOf(
                     "collection" to "entries",
@@ -88,10 +99,10 @@ class PoctechWorkerTest : TestBaseWithProfile() {
     @Test
     fun `When plugin enabled then insert mgdl data`() {
         val timestamp = (now - 60000)
-        runTest {
+        runBlocking {
             whenever(poctechPlugin.isEnabled()).thenReturn(true)
             whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
             whenever(workerParameters.inputData).thenReturn(
                 workDataOf(
                     "collection" to "entries",
@@ -125,7 +136,7 @@ class PoctechWorkerTest : TestBaseWithProfile() {
 
     @Test
     fun `When collection is missing then return failure`() {
-        runTest {
+        runBlocking {
             whenever(poctechPlugin.isEnabled()).thenReturn(true)
             whenever(workerParameters.inputData).thenReturn(
                 workDataOf("wrong" to "data")

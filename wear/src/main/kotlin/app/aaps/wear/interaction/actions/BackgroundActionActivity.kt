@@ -1,8 +1,7 @@
 package app.aaps.wear.interaction.actions
 
-import android.content.Intent
 import android.os.Bundle
-import androidx.wear.activity.ConfirmationActivity
+import android.widget.Toast
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.bus.RxBus
@@ -23,12 +22,7 @@ class BackgroundActionActivity : DaggerActivity() {
             aapsLogger.info(LTag.WEAR, "QuickWizardActivity.onCreate: action=$action")
             rxBus.send(EventWearToMobile(EventData.deserialize(action)))
             intent.extras?.getString(DataLayerListenerServiceWear.KEY_MESSAGE)?.let { message ->
-                startActivity(
-                    Intent(this, ConfirmationActivity::class.java).apply {
-                        putExtra(ConfirmationActivity.EXTRA_ANIMATION_TYPE, ConfirmationActivity.SUCCESS_ANIMATION)
-                        putExtra(ConfirmationActivity.EXTRA_MESSAGE, message)
-                    }
-                )
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             }
         } ?: aapsLogger.error(LTag.WEAR, "BackgroundActionActivity.onCreate extras 'actionString' required")
         finishAffinity()

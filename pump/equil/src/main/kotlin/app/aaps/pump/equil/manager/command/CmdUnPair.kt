@@ -3,7 +3,6 @@ package app.aaps.pump.equil.manager.command
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.utils.notify
 import app.aaps.pump.equil.database.EquilHistoryRecord
 import app.aaps.pump.equil.manager.AESUtil
 import app.aaps.pump.equil.manager.EquilManager
@@ -102,7 +101,7 @@ class CmdUnPair(
         return null
     }
 
-    override fun decode(): EquilResponse {
+    override fun decode(): EquilResponse? {
         val equilCmdModel = decodeModel()
         val keyBytes = randomPassword!!
 
@@ -129,10 +128,10 @@ class CmdUnPair(
         //val content = AESUtil.decrypt(equilCmdModel, Utils.hexStringToBytes(runPwd))
         synchronized(this) {
             cmdSuccess = true
-            notify()
+            (this as Object).notify()
         }
         return null
     }
 
-    override fun getEventType(): EquilHistoryRecord.EventType = EquilHistoryRecord.EventType.UNPAIR_EQUIL
+    override fun getEventType(): EquilHistoryRecord.EventType? = EquilHistoryRecord.EventType.UNPAIR_EQUIL
 }

@@ -3,10 +3,8 @@ package app.aaps.database.transactions
 import app.aaps.database.DelegatedAppDatabase
 import app.aaps.database.daos.BolusDao
 import app.aaps.database.entities.Bolus
-import app.aaps.database.entities.embedments.InsulinConfiguration
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -28,7 +26,7 @@ class InsertBolusWithTempIdTransactionTest {
     }
 
     @Test
-    fun `inserts new bolus when not found by temp id`() = runTest {
+    fun `inserts new bolus when not found by temp id`() {
         val bolus = createBolus(tempId = 500L, amount = 5.0)
 
         whenever(bolusDao.findByPumpTempIds(500L, InterfaceIDs.PumpType.DANA_I, "ABC123")).thenReturn(null)
@@ -45,7 +43,7 @@ class InsertBolusWithTempIdTransactionTest {
     }
 
     @Test
-    fun `does not insert when bolus already exists by temp id`() = runTest {
+    fun `does not insert when bolus already exists by temp id`() {
         val bolus = createBolus(tempId = 500L, amount = 5.0)
         val existing = createBolus(tempId = 500L, amount = 5.0)
 
@@ -71,7 +69,6 @@ class InsertBolusWithTempIdTransactionTest {
             temporaryId = tempId,
             pumpType = InterfaceIDs.PumpType.DANA_I,
             pumpSerial = "ABC123"
-        ),
-        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L, 1.0)
+        )
     )
 }

@@ -31,7 +31,6 @@ import app.aaps.plugins.aps.logger.LoggerCallback
 import app.aaps.plugins.aps.openAPSSMB.DetermineBasalResultSMBFromJS
 import app.aaps.plugins.aps.utils.ScriptReader
 import dagger.android.HasAndroidInjector
-import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -283,7 +282,7 @@ class DetermineBasalAdapterAutoISFJS(private val scriptReader: ScriptReader, pri
             this.profile.put("out_units", "mmol/L")
         }
         val now = System.currentTimeMillis()
-        val tb = runBlocking { processedTbrEbData.getTempBasalIncludingConvertedExtended(now) }
+        val tb = processedTbrEbData.getTempBasalIncludingConvertedExtended(now)
         currentTemp.put("temp", "absolute")
         currentTemp.put("duration", tb?.plannedRemainingMinutes ?: 0)
         currentTemp.put("rate", tb?.convertedToAbsolute(now, profile) ?: 0.0)

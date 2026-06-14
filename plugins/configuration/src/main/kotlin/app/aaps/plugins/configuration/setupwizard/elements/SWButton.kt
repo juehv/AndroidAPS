@@ -1,13 +1,15 @@
 package app.aaps.plugins.configuration.setupwizard.elements
 
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
+import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import androidx.appcompat.app.AppCompatActivity
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.protection.PasswordCheck
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.keys.interfaces.Preferences
+import app.aaps.core.ui.extensions.scanForActivity
 import javax.inject.Inject
 
 class SWButton @Inject constructor(aapsLogger: AAPSLogger, rh: ResourceHelper, rxBus: RxBus, preferences: Preferences, passwordCheck: PasswordCheck) : SWItem(aapsLogger, rh, rxBus, preferences, passwordCheck) {
@@ -15,6 +17,7 @@ class SWButton @Inject constructor(aapsLogger: AAPSLogger, rh: ResourceHelper, r
     private var buttonRunnable: Runnable? = null
     private var buttonText = 0
     private var buttonValidator: (() -> Boolean)? = null
+    private var buttonId: Int = 0
 
     fun text(buttonText: Int): SWButton {
         this.buttonText = buttonText
@@ -31,14 +34,26 @@ class SWButton @Inject constructor(aapsLogger: AAPSLogger, rh: ResourceHelper, r
         return this
     }
 
-    @Composable
-    override fun Compose() {
-        val enabled = buttonValidator?.invoke() != false
-        androidx.compose.material3.Button(
-            onClick = { buttonRunnable?.run() },
-            enabled = enabled
-        ) {
-            Text(text = stringResource(buttonText))
+    override fun generateDialog(layout: LinearLayout) {
+        val context = layout.context
+        val button = Button(context)
+        button.id = View.generateViewId()
+        buttonId = button.id
+        button.setText(buttonText)
+        button.setOnClickListener { buttonRunnable?.run() }
+        processVisibility(layout.context.scanForActivity() ?: error("Activity not found"))
+        layout.addView(button)
+        super.generateDialog(layout)
+    }
+
+    override fun processVisibility(activity: AppCompatActivity) {
+        val button = activity.findViewById<Button>(buttonId)
+        if (buttonValidator?.invoke() == false) {
+            button?.isEnabled = false
+            button?.alpha = .5f
+        } else {
+            button?.isEnabled = true
+            button?.alpha = 1f
         }
     }
 }

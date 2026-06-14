@@ -11,16 +11,17 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class FetchAlarmTask @Inject constructor(
     private val alarmRegistry: IAlarmRegistry
 ) : TaskBase(TaskFunc.FETCH_ALARM) {
 
-    @Inject lateinit var alarmAlertErrorCodeGet: GetErrorCodes
+    private val ALARM_ALERT_ERROR_CODE_GET: GetErrorCodes = GetErrorCodes()
 
     fun getPatchAlarm(): Single<AeCodeResponse> {
         return isReady()
-            .concatMapSingle<AeCodeResponse>(Function { alarmAlertErrorCodeGet.get() })
+            .concatMapSingle<AeCodeResponse>(Function { ALARM_ALERT_ERROR_CODE_GET.get() })
             .doOnNext(Consumer { response: AeCodeResponse -> this.checkResponse(response) })
             .firstOrError()
             .doOnSuccess(Consumer { aeCodeResponse: AeCodeResponse -> alarmRegistry.add(aeCodeResponse.alarmCodes) })

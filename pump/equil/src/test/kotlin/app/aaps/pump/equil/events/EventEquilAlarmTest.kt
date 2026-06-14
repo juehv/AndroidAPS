@@ -2,6 +2,7 @@ package app.aaps.pump.equil.events
 
 import app.aaps.shared.tests.TestBase
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
 class EventEquilAlarmTest : TestBase() {
@@ -79,5 +80,18 @@ class EventEquilAlarmTest : TestBase() {
 
         event.tips = "Second update"
         assertEquals("Second update", event.tips)
+    }
+
+    @Test
+    fun `event should extend Event base class`() {
+        val event = EventEquilAlarm("Test")
+        assert(event is app.aaps.core.interfaces.rx.events.Event)
+    }
+
+    @Test
+    fun `tips with unicode characters should work`() {
+        val unicodeMessage = "警告: バッテリー残量低 🔋"
+        val event = EventEquilAlarm(unicodeMessage)
+        assertEquals(unicodeMessage, event.tips)
     }
 }

@@ -20,21 +20,11 @@ import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.nsclient.NSClientRepository
 import app.aaps.core.interfaces.pump.VirtualPump
+import app.aaps.core.interfaces.source.NSClientSource
 import app.aaps.core.keys.BooleanKey
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.cancel
-import org.junit.jupiter.api.AfterEach
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -54,16 +44,15 @@ import org.mockito.kotlin.whenever
 class StoreDataForDbImplTest : TestBaseWithProfile() {
 
     @Mock private lateinit var persistenceLayer: PersistenceLayer
+    @Mock private lateinit var nsClientSource: NSClientSource
     @Mock private lateinit var virtualPump: VirtualPump
-    @Mock private lateinit var nsClientRepository: NSClientRepository
 
     private lateinit var storeDataForDb: StoreDataForDbImpl
-    private lateinit var testAppScope: CoroutineScope
 
     val tt = TT(timestamp = now, reason = TT.Reason.ACTIVITY, highTarget = 120.0, lowTarget = 100.0, duration = T.mins(30).msecs())
     val gv = GV(raw = 0.0, noise = 0.0, value = 100.0, timestamp = now, sourceSensor = SourceSensor.IOB_PREDICTION, trendArrow = TrendArrow.NONE)
     val fd = FD(name = "Apple", carbs = 24, portion = 1.0)
-    val bs = BS(timestamp = now - 1, amount = 1.0, type = BS.Type.NORMAL, iCfg = someICfg)
+    val bs = BS(timestamp = now - 1, amount = 1.0, type = BS.Type.NORMAL)
     val ca = CA(timestamp = now, amount = 12.0, duration = 0)
     val tb = TB(timestamp = now, type = TB.Type.NORMAL, isAbsolute = true, rate = 0.7, duration = T.mins(30).msecs())
     val eb = EB(timestamp = now - 1, amount = 1.0, duration = T.hours(1).msecs())
@@ -88,26 +77,27 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     @BeforeEach
     fun setUp() {
         // Mock the persistence layer to return empty results immediately
-        runTest {
-            whenever(persistenceLayer.insertCgmSourceData(any(), any(), any(), anyOrNull()))
-                .thenReturn(
+        whenever(persistenceLayer.insertCgmSourceData(any(), any(), any(), anyOrNull()))
+            .thenReturn(
+                Single.just(
                     PersistenceLayer.TransactionResult<GV>().apply {
                         inserted.add(gv)
                         updated.add(gv)
                         updatedNsId.add(gv)
                         invalidated.add(gv)
                     }
-                )
-            whenever(persistenceLayer.syncNsBolus(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsCarbs(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsTemporaryTargets(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsTemporaryBasals(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsExtendedBoluses(any(), any()))
-                .thenReturn(
+                ))
+        whenever(persistenceLayer.syncNsBolus(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsCarbs(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsTemporaryTargets(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsTemporaryBasals(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsExtendedBoluses(any(), any()))
+            .thenReturn(
+                Single.just(
                     PersistenceLayer.TransactionResult<EB>().apply {
                         inserted.add(eb)
                         updated.add(eb)
@@ -116,69 +106,61 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
                         updatedDuration.add(eb)
                         ended.add(eb)
                     }
-                )
-            whenever(persistenceLayer.syncNsBolusCalculatorResults(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsEffectiveProfileSwitches(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsProfileSwitches(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsRunningModes(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsTherapyEvents(any(), any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.syncNsFood(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateTemporaryTargetsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateGlucoseValuesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateFoodsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateTherapyEventsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateBolusesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateCarbsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateBolusCalculatorResultsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateTemporaryBasalsNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateExtendedBolusesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateProfileSwitchesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateEffectiveProfileSwitchesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateDeviceStatusesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.updateRunningModesNsIds(any()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.invalidateGlucoseValue(any(), any(), any(), anyOrNull(), anyList()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-        }
+                ))
+        whenever(persistenceLayer.syncNsBolusCalculatorResults(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsEffectiveProfileSwitches(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsProfileSwitches(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsRunningModes(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsTherapyEvents(any(), any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.syncNsFood(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateTemporaryTargetsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateGlucoseValuesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateFoodsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateTherapyEventsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateBolusesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateCarbsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateBolusCalculatorResultsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateTemporaryBasalsNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateExtendedBolusesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateProfileSwitchesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateEffectiveProfileSwitchesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateDeviceStatusesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.updateRunningModesNsIds(any()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.invalidateGlucoseValue(any(), any(), any(), anyOrNull(), anyList()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
-        testAppScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         storeDataForDb = StoreDataForDbImpl(
             aapsLogger = aapsLogger,
+            rxBus = rxBus,
             persistenceLayer = persistenceLayer,
             preferences = preferences,
             config = config,
-            virtualPump = virtualPump,
-            nsClientRepository = nsClientRepository,
-            appScope = testAppScope
+            nsClientSource = nsClientSource,
+            virtualPump = virtualPump
         )
     }
 
-    @AfterEach
-    fun tearDown() {
-        // Cancel the channel collectors so they don't leak into the next test.
-        testAppScope.cancel()
-    }
-
     @Test
-    fun `storeGlucoseValuesToDb calls persistenceLayer and clears list`() = runTest {
+    fun `storeGlucoseValuesToDb calls persistenceLayer and clears list`() {
         val glucoseValues = mutableListOf(gv)
         storeDataForDb.addToGlucoseValues(glucoseValues)
         storeDataForDb.storeGlucoseValuesToDb()
@@ -194,7 +176,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `storeFoodsToDb calls persistenceLayer and clears list`() = runTest {
+    fun `storeFoodsToDb calls persistenceLayer and clears list`() {
         val foods = mutableListOf(fd)
         storeDataForDb.addToFoods(foods)
         storeDataForDb.storeFoodsToDb()
@@ -204,7 +186,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `storeTreatmentsToDb calls all relevant persistenceLayer methods`() = runTest {
+    fun `storeTreatmentsToDb calls all relevant persistenceLayer methods`() {
         storeDataForDb.addToBoluses(bs)
         storeDataForDb.addToCarbs(ca)
         storeDataForDb.addToTemporaryTargets(tt)
@@ -235,7 +217,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `store methods do not call persistenceLayer when lists are empty`() = runTest {
+    fun `store methods do not call persistenceLayer when lists are empty`() {
         // Act
         storeDataForDb.storeGlucoseValuesToDb()
         storeDataForDb.storeFoodsToDb()
@@ -257,7 +239,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for temporary targets`() = runTest {
+    fun `updateNsIds calls persistenceLayer for temporary targets`() {
         storeDataForDb.addToNsIdTemporaryTargets(tt)
         storeDataForDb.updateNsIds()
 
@@ -268,7 +250,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for glucose values`() = runTest {
+    fun `updateNsIds calls persistenceLayer for glucose values`() {
         storeDataForDb.addToNsIdGlucoseValues(gv)
         storeDataForDb.updateNsIds()
 
@@ -279,7 +261,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for foods`() = runTest {
+    fun `updateNsIds calls persistenceLayer for foods`() {
         storeDataForDb.addToNsIdFoods(fd)
         storeDataForDb.updateNsIds()
 
@@ -290,7 +272,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for therapy events`() = runTest {
+    fun `updateNsIds calls persistenceLayer for therapy events`() {
         storeDataForDb.addToNsIdTherapyEvents(te)
         storeDataForDb.updateNsIds()
 
@@ -301,7 +283,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for boluses`() = runTest {
+    fun `updateNsIds calls persistenceLayer for boluses`() {
         storeDataForDb.addToNsIdBoluses(bs)
         storeDataForDb.updateNsIds()
 
@@ -312,7 +294,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for carbs`() = runTest {
+    fun `updateNsIds calls persistenceLayer for carbs`() {
         storeDataForDb.addToNsIdCarbs(ca)
         storeDataForDb.updateNsIds()
 
@@ -323,7 +305,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for bolus calculator results`() = runTest {
+    fun `updateNsIds calls persistenceLayer for bolus calculator results`() {
         storeDataForDb.addToNsIdBolusCalculatorResults(bcr)
         storeDataForDb.updateNsIds()
 
@@ -334,7 +316,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for temporary basals`() = runTest {
+    fun `updateNsIds calls persistenceLayer for temporary basals`() {
         storeDataForDb.addToNsIdTemporaryBasals(tb)
         storeDataForDb.updateNsIds()
 
@@ -345,7 +327,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for extended boluses`() = runTest {
+    fun `updateNsIds calls persistenceLayer for extended boluses`() {
         storeDataForDb.addToNsIdExtendedBoluses(eb)
         storeDataForDb.updateNsIds()
 
@@ -356,7 +338,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for profile switches`() = runTest {
+    fun `updateNsIds calls persistenceLayer for profile switches`() {
         storeDataForDb.addToNsIdProfileSwitches(ps)
         storeDataForDb.updateNsIds()
 
@@ -367,7 +349,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for effective profile switches`() = runTest {
+    fun `updateNsIds calls persistenceLayer for effective profile switches`() {
         storeDataForDb.addToNsIdEffectiveProfileSwitches(eps)
         storeDataForDb.updateNsIds()
 
@@ -378,7 +360,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for device statuses`() = runTest {
+    fun `updateNsIds calls persistenceLayer for device statuses`() {
         storeDataForDb.addToNsIdDeviceStatuses(ds)
         storeDataForDb.updateNsIds()
 
@@ -389,7 +371,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateNsIds calls persistenceLayer for running modes`() = runTest {
+    fun `updateNsIds calls persistenceLayer for running modes`() {
         storeDataForDb.addToNsIdRunningModes(rm)
         storeDataForDb.updateNsIds()
 
@@ -400,20 +382,20 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates bolus when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates bolus when preference is enabled`() {
         val nsId = "bolus_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptInsulin)).thenReturn(true)
         whenever(persistenceLayer.getBolusByNSId(nsId)).thenReturn(bs)
-        whenever(persistenceLayer.invalidateBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         storeDataForDb.updateDeletedTreatmentsInDb()
         verify(persistenceLayer).getBolusByNSId(nsId)
         verify(persistenceLayer).invalidateBolus(eq(bs.id), any(), any(), anyOrNull(), anyList())
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate bolus when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate bolus when preference is disabled`() {
         val nsId = "bolus_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
 
@@ -425,20 +407,20 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates carb when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates carb when preference is enabled`() {
         val nsId = "carb_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptCarbs)).thenReturn(true)
         whenever(persistenceLayer.getCarbsByNSId(nsId)).thenReturn(ca)
-        whenever(persistenceLayer.invalidateCarbs(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateCarbs(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         storeDataForDb.updateDeletedTreatmentsInDb()
         verify(persistenceLayer).getCarbsByNSId(nsId)
         verify(persistenceLayer).invalidateCarbs(eq(ca.id), any(), any(), anyOrNull(), anyList())
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate carb when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate carb when preference is disabled`() {
         // Arrange
         val nsId = "carb_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -455,14 +437,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates temp target when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates temp target when preference is enabled`() {
         // Arrange
         val nsId = "tt_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptTempTarget)).thenReturn(true)
         whenever(persistenceLayer.getTemporaryTargetByNSId(nsId)).thenReturn(tt)
-        whenever(persistenceLayer.invalidateTemporaryTarget(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateTemporaryTarget(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -473,7 +455,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate temp target when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate temp target when preference is disabled`() {
         // Arrange
         val nsId = "tt_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -489,15 +471,15 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb always invalidates bolus calculator result`() = runTest {
+    fun `updateDeletedTreatmentsInDb always invalidates bolus calculator result`() {
         // Arrange
         val nsId = "bcr_to_delete"
         val bcrToDelete = bcr.apply { this.id = 999L }
         storeDataForDb.addToDeleteTreatment(nsId)
 
-        // Set preferences too false to prove they are ignored for BCR
+        // Set preferences to false to prove they are ignored for BCR
         whenever(persistenceLayer.getBolusCalculatorResultByNSId(nsId)).thenReturn(bcrToDelete)
-        whenever(persistenceLayer.invalidateBolusCalculatorResult(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateBolusCalculatorResult(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -508,14 +490,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates temp basal when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates temp basal when preference is enabled`() {
         // Arrange
         val nsId = "tb_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptTbrEb)).thenReturn(true)
         whenever(persistenceLayer.getTemporaryBasalByNSId(nsId)).thenReturn(tb)
-        whenever(persistenceLayer.invalidateTemporaryBasal(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateTemporaryBasal(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -526,7 +508,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate temp basal when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate temp basal when preference is disabled`() {
         // Arrange
         val nsId = "tb_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -543,14 +525,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates extended bolus when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates extended bolus when preference is enabled`() {
         // Arrange
         val nsId = "eb_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptTbrEb)).thenReturn(true)
         whenever(persistenceLayer.getExtendedBolusByNSId(nsId)).thenReturn(eb)
-        whenever(persistenceLayer.invalidateExtendedBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateExtendedBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -561,7 +543,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate extended bolus when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate extended bolus when preference is disabled`() {
         // Arrange
         val nsId = "eb_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -578,14 +560,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates profile switch when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates profile switch when preference is enabled`() {
         // Arrange
         val nsId = "ps_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptProfileSwitch)).thenReturn(true)
         whenever(persistenceLayer.getProfileSwitchByNSId(nsId)).thenReturn(ps)
-        whenever(persistenceLayer.invalidateProfileSwitch(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateProfileSwitch(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -596,7 +578,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate profile switch when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate profile switch when preference is disabled`() {
         // Arrange
         val nsId = "ps_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -613,14 +595,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates effective profile switch when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates effective profile switch when preference is enabled`() {
         // Arrange
         val nsId = "eps_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptProfileSwitch)).thenReturn(true)
         whenever(persistenceLayer.getEffectiveProfileSwitchByNSId(nsId)).thenReturn(eps)
-        whenever(persistenceLayer.invalidateEffectiveProfileSwitch(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateEffectiveProfileSwitch(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -631,7 +613,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate effective profile switch when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate effective profile switch when preference is disabled`() {
         // Arrange
         val nsId = "eps_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -648,7 +630,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates running mode when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates running mode when preference is enabled`() {
         // Arrange
         val nsId = "rm_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -656,7 +638,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
         whenever(preferences.get(BooleanKey.NsClientAcceptRunningMode)).thenReturn(true)
         whenever(config.isEngineeringMode()).thenReturn(true) // Both conditions must be met
         whenever(persistenceLayer.getRunningModeByNSId(nsId)).thenReturn(rm)
-        whenever(persistenceLayer.invalidateRunningMode(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateRunningMode(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -667,7 +649,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate running mode when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate running mode when preference is disabled`() {
         // Arrange
         val nsId = "rm_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -684,14 +666,14 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates therapy event when preference is enabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates therapy event when preference is enabled`() {
         // Arrange
         val nsId = "te_to_delete"
         storeDataForDb.addToDeleteTreatment(nsId)
 
         whenever(preferences.get(BooleanKey.NsClientAcceptTherapyEvent)).thenReturn(true)
         whenever(persistenceLayer.getTherapyEventByNSId(nsId)).thenReturn(te)
-        whenever(persistenceLayer.invalidateTherapyEvent(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateTherapyEvent(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Act
         storeDataForDb.updateDeletedTreatmentsInDb()
@@ -702,7 +684,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb does NOT invalidate therapy event when preference is disabled`() = runTest {
+    fun `updateDeletedTreatmentsInDb does NOT invalidate therapy event when preference is disabled`() {
         // Arrange
         val nsId = "te_to_ignore"
         storeDataForDb.addToDeleteTreatment(nsId)
@@ -718,7 +700,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedGlucoseValuesInDb invalidates glucose value when found`() = runTest {
+    fun `updateDeletedGlucoseValuesInDb invalidates glucose value when found`() {
         val nsIdToDelete = "gv_to_delete_id"
         storeDataForDb.addToDeleteGlucoseValue(nsIdToDelete)
         whenever(persistenceLayer.getBgReadingByNSId(nsIdToDelete)).thenReturn(gv)
@@ -731,7 +713,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedGlucoseValuesInDb does nothing if glucose value is not found`() = runTest {
+    fun `updateDeletedGlucoseValuesInDb does nothing if glucose value is not found`() {
         val nsIdNotFound = "gv_not_in_db_id"
         storeDataForDb.addToDeleteGlucoseValue(nsIdNotFound)
         whenever(persistenceLayer.getBgReadingByNSId(nsIdNotFound)).thenReturn(null)
@@ -745,7 +727,7 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `updateDeletedTreatmentsInDb invalidates multiple different treatments in one go`() = runTest {
+    fun `updateDeletedTreatmentsInDb invalidates multiple different treatments in one go`() {
         // Arrange
         val bolusId = "bolus_multi_delete"
         val carbId = "carb_multi_delete"
@@ -756,9 +738,9 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
         whenever(preferences.get(BooleanKey.NsClientAcceptCarbs)).thenReturn(true)
 
         whenever(persistenceLayer.getBolusByNSId(bolusId)).thenReturn(bs)
-        whenever(persistenceLayer.invalidateBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateBolus(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         whenever(persistenceLayer.getCarbsByNSId(carbId)).thenReturn(ca)
-        whenever(persistenceLayer.invalidateCarbs(any(), any(), any(), anyOrNull(), anyList())).thenReturn(PersistenceLayer.TransactionResult())
+        whenever(persistenceLayer.invalidateCarbs(any(), any(), any(), anyOrNull(), anyList())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         storeDataForDb.updateDeletedTreatmentsInDb()
         verify(persistenceLayer).getBolusByNSId(bolusId)
         verify(persistenceLayer).invalidateBolus(eq(bs.id), any(), any(), anyOrNull(), anyList())
@@ -772,77 +754,5 @@ class StoreDataForDbImplTest : TestBaseWithProfile() {
         assertNull(storeDataForDb.scheduledEventPost)
         storeDataForDb.scheduleNsIdUpdate()
         assertNotNull(storeDataForDb.scheduledEventPost)
-    }
-
-    /* -------- Concurrency / coalescing tests -------- */
-
-    @Test
-    fun `concurrent storeGlucoseValuesToDb calls do not lose items and serialize`() = runTest {
-        // Two callers race to drain the same buffer. The bgMutex must serialize them and
-        // snapshotAndClear must hand all items to whichever wins; the loser sees an empty buffer.
-        val gv2 = gv.copy(timestamp = now + 1)
-        storeDataForDb.addToGlucoseValues(mutableListOf(gv, gv2))
-
-        val jobs = listOf(
-            async { storeDataForDb.storeGlucoseValuesToDb() },
-            async { storeDataForDb.storeGlucoseValuesToDb() }
-        )
-        jobs.awaitAll()
-
-        // Exactly one DB call carrying both items; second call had nothing to do.
-        verify(persistenceLayer).insertCgmSourceData(
-            eq(Sources.NSClient),
-            argThat { size == 2 },
-            anyList(),
-            eq(null)
-        )
-        verifyNoMoreInteractions(persistenceLayer)
-    }
-
-    @Test
-    fun `addToGlucoseValues during processing lands in the next call`() = runTest {
-        // First call drains [gv]. Add gv2 after the snapshot. Second call drains [gv2].
-        storeDataForDb.addToGlucoseValues(mutableListOf(gv))
-        storeDataForDb.storeGlucoseValuesToDb()
-        verify(persistenceLayer).insertCgmSourceData(eq(Sources.NSClient), argThat { size == 1 && get(0).timestamp == gv.timestamp }, anyList(), eq(null))
-
-        val gv2 = gv.copy(timestamp = now + 1)
-        storeDataForDb.addToGlucoseValues(mutableListOf(gv2))
-        storeDataForDb.storeGlucoseValuesToDb()
-        verify(persistenceLayer).insertCgmSourceData(eq(Sources.NSClient), argThat { size == 1 && get(0).timestamp == gv2.timestamp }, anyList(), eq(null))
-    }
-
-    @Test
-    fun `bg pipeline runs in parallel with treatments pipeline`() = runTest {
-        // bgMutex and treatmentsMutex are independent: a long treatments sync must not
-        // block BG ingest. We can't measure wall-clock here, but verifying both DB calls
-        // were issued in a single test scope (no deadlock) with no shared lock proves
-        // the mutexes are separate.
-        storeDataForDb.addToGlucoseValues(mutableListOf(gv))
-        storeDataForDb.addToBoluses(bs)
-
-        val jobs = listOf(
-            async { storeDataForDb.storeGlucoseValuesToDb() },
-            async { storeDataForDb.storeTreatmentsToDb(fullSync = false) }
-        )
-        jobs.awaitAll()
-
-        verify(persistenceLayer).insertCgmSourceData(eq(Sources.NSClient), any(), anyList(), eq(null))
-        verify(persistenceLayer).syncNsBolus(any(), any())
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
-    fun `requestStoreGlucoseValues coalesces a burst into a single DB call`() = runTest {
-        // CONFLATED channel: 100 trySend calls between collector iterations should still
-        // produce just one drain (because the collector runs once and there's nothing left).
-        storeDataForDb.addToGlucoseValues(mutableListOf(gv))
-        repeat(100) { storeDataForDb.requestStoreGlucoseValues() }
-        // Allow the collector launched in init to drain the channel.
-        advanceUntilIdle()
-        yield()
-
-        verify(persistenceLayer).insertCgmSourceData(eq(Sources.NSClient), any(), anyList(), eq(null))
-        verifyNoMoreInteractions(persistenceLayer)
     }
 }

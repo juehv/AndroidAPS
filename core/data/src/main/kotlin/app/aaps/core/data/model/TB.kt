@@ -9,14 +9,14 @@ data class TB(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     var type: Type,
     var isAbsolute: Boolean,
     var rate: Double,
     /** Duration in milliseconds */
     var duration: Long
-) : HasIDs, TimeStamped {
+) : HasIDs {
 
     init {
         require(duration > 0)

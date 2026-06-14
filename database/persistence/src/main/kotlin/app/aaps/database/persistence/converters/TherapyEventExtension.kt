@@ -128,8 +128,6 @@ fun TherapyEvent.Location.fromDb(): TE.Location = when (this) {
     TherapyEvent.Location.FRONT_LEFT_LOWER_ABDOMEN  -> TE.Location.FRONT_LEFT_LOWER_ABDOMEN
     TherapyEvent.Location.BACK_RIGHT_BUTTOCK        -> TE.Location.BACK_RIGHT_BUTTOCK
     TherapyEvent.Location.BACK_LEFT_BUTTOCK         -> TE.Location.BACK_LEFT_BUTTOCK
-    TherapyEvent.Location.BACK_RIGHT_LOWER_BACK        -> TE.Location.BACK_RIGHT_LOWER_BACK
-    TherapyEvent.Location.BACK_LEFT_LOWER_BACK         -> TE.Location.BACK_LEFT_LOWER_BACK
     TherapyEvent.Location.FRONT_RIGHT_UPPER_THIGH   -> TE.Location.FRONT_RIGHT_UPPER_THIGH
     TherapyEvent.Location.FRONT_LEFT_UPPER_THIGH    -> TE.Location.FRONT_LEFT_UPPER_THIGH
     TherapyEvent.Location.FRONT_RIGHT_LOWER_THIGH   -> TE.Location.FRONT_RIGHT_LOWER_THIGH
@@ -158,8 +156,6 @@ fun TE.Location.toDb(): TherapyEvent.Location = when (this) {
     TE.Location.FRONT_LEFT_LOWER_ABDOMEN  -> TherapyEvent.Location.FRONT_LEFT_LOWER_ABDOMEN
     TE.Location.BACK_RIGHT_BUTTOCK        -> TherapyEvent.Location.BACK_RIGHT_BUTTOCK
     TE.Location.BACK_LEFT_BUTTOCK         -> TherapyEvent.Location.BACK_LEFT_BUTTOCK
-    TE.Location.BACK_RIGHT_LOWER_BACK     -> TherapyEvent.Location.BACK_RIGHT_LOWER_BACK
-    TE.Location.BACK_LEFT_LOWER_BACK      -> TherapyEvent.Location.BACK_LEFT_LOWER_BACK
     TE.Location.FRONT_RIGHT_UPPER_THIGH   -> TherapyEvent.Location.FRONT_RIGHT_UPPER_THIGH
     TE.Location.FRONT_LEFT_UPPER_THIGH    -> TherapyEvent.Location.FRONT_LEFT_UPPER_THIGH
     TE.Location.FRONT_RIGHT_LOWER_THIGH   -> TherapyEvent.Location.FRONT_RIGHT_LOWER_THIGH

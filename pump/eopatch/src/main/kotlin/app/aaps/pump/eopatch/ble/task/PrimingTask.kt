@@ -16,14 +16,15 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class PrimingTask @Inject constructor() : TaskBase(TaskFunc.PRIMING) {
 
-    @Inject lateinit var updateConnection: UpdateConnection
-    @Inject lateinit var startPriming: StartPriming
+    private val UPDATE_CONNECTION: UpdateConnection = UpdateConnection()
+    private val START_PRIMING: StartPriming = StartPriming()
 
     fun start(count: Long): Observable<Long> {
-        return isReady().concatMapSingle<PatchBooleanResponse>(Function { startPriming.start() })
+        return isReady().concatMapSingle<PatchBooleanResponse>(Function { START_PRIMING.start() })
             .doOnNext(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
             .flatMap<Long>(Function { observePrimingSuccess(count) })
             .takeUntil(Predicate { value: Long -> (value == count) })
@@ -41,8 +42,8 @@ class PrimingTask @Inject constructor() : TaskBase(TaskFunc.PRIMING) {
                 }),
 
             Observable.interval(3, TimeUnit.SECONDS)
-                .concatMapSingle<UpdateConnectionResponse>(Function { updateConnection.get() })
-                .map<PatchState>(Function { response: UpdateConnectionResponse -> create(response.patchState, System.currentTimeMillis()) })
+                .concatMapSingle<UpdateConnectionResponse>(Function { UPDATE_CONNECTION.get() })
+                .map<PatchState>(Function { response: UpdateConnectionResponse -> create(response.getPatchState(), System.currentTimeMillis()) })
                 .filter(PatchState::isPrimingSuccess)
                 .map<Long>(Function { count })
         )

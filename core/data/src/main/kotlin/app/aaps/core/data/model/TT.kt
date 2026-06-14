@@ -9,14 +9,14 @@ data class TT(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     var reason: Reason,
     var highTarget: Double, // in mgdl
     var lowTarget: Double, // in mgdl
     /** Duration in milliseconds */
     var duration: Long
-) : HasIDs, TimeStamped {
+) : HasIDs {
 
     fun contentEqualsTo(other: TT): Boolean =
         timestamp == other.timestamp &&

@@ -1,5 +1,6 @@
 package app.aaps.core.interfaces.nsclient
 
+import android.text.Spanned
 import app.aaps.core.interfaces.aps.APSResult
 import app.aaps.core.interfaces.aps.RT
 
@@ -21,7 +22,7 @@ interface ProcessedDeviceStatusData {
         var status = "N/A"
         var reservoir = 0.0
         var reservoirDisplayOverride = ""
-        var extended: String? = null
+        var extended: Spanned? = null
         var activeProfileName: String? = null
     }
 
@@ -53,7 +54,14 @@ interface ProcessedDeviceStatusData {
 
     var openAPSData: OpenAPSData
 
+    // test warning level // color
+    fun pumpStatus(nsSettingsStatus: NSSettingsStatus): Spanned
+    val extendedPumpStatus: Spanned
+    val extendedOpenApsStatus: Spanned
+    val openApsStatus: Spanned
     val openApsTimestamp: Long
     fun getAPSResult(): APSResult?
     val uploaderStatus: String
+    val uploaderStatusSpanned: Spanned
+    val extendedUploaderStatus: Spanned
 }

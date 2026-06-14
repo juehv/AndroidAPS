@@ -9,32 +9,45 @@ import app.aaps.core.interfaces.pump.PumpEnactResult
 import app.aaps.core.interfaces.queue.Callback
 import app.aaps.core.interfaces.queue.Command
 import app.aaps.core.interfaces.resources.ResourceHelper
+import dagger.android.HasAndroidInjector
+import javax.inject.Inject
 import javax.inject.Provider
 
 class CommandReadStatus(
-    private val aapsLogger: AAPSLogger,
-    private val rh: ResourceHelper,
-    private val activePlugin: ActivePlugin,
-    private val localAlertUtils: LocalAlertUtils,
-    override val pumpEnactResultProvider: Provider<PumpEnactResult>,
+    injector: HasAndroidInjector,
     val reason: String,
     override val callback: Callback?,
 ) : Command {
 
+    @Inject lateinit var aapsLogger: AAPSLogger
+    @Inject lateinit var rh: ResourceHelper
+    @Inject lateinit var activePlugin: ActivePlugin
+    @Inject lateinit var localAlertUtils: LocalAlertUtils
+
+    @Inject lateinit var pumpEnactResultProvider: Provider<PumpEnactResult>
+
+    init {
+        injector.androidInjector().inject(this)
+    }
+
     override val commandType: Command.CommandType = Command.CommandType.READSTATUS
 
-    override suspend fun execute(): PumpEnactResult {
+    override fun execute() {
         activePlugin.activePump.getPumpStatus(reason)
         localAlertUtils.reportPumpStatusRead()
         aapsLogger.debug(LTag.PUMPQUEUE, "CommandReadStatus executed. Reason: $reason")
         val pump = activePlugin.activePump
         val result = pumpEnactResultProvider.get().success(false)
-        val lastConnection = pump.lastDataTime.value
+        val lastConnection = pump.lastDataTime
         if (lastConnection > System.currentTimeMillis() - T.mins(1).msecs()) result.success(true)
-        return result
+        callback?.result(result)?.run()
     }
 
     override fun status(): String = rh.gs(app.aaps.core.ui.R.string.read_status, reason)
 
     override fun log(): String = "READSTATUS $reason"
+    override fun cancel() {
+        aapsLogger.debug(LTag.PUMPQUEUE, "Result cancel")
+        callback?.result(pumpEnactResultProvider.get().success(false).comment(app.aaps.core.ui.R.string.connectiontimedout))?.run()
+    }
 }

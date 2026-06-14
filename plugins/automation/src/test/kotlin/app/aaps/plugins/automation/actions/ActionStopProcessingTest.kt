@@ -1,8 +1,8 @@
 package app.aaps.plugins.automation.actions
 
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.plugins.automation.R
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.whenever
@@ -19,18 +19,26 @@ class ActionStopProcessingTest : ActionsTestBase() {
     }
 
     @Test
-    fun friendlyNameTest() = runTest {
+    fun friendlyNameTest() {
         assertThat(sut.friendlyName()).isEqualTo(R.string.stop_processing)
     }
 
     @Test
-    fun shortDescriptionTest() = runTest {
+    fun shortDescriptionTest() {
         assertThat(sut.shortDescription()).isEqualTo("Stop processing")
     }
 
     @Test
-    fun doActionTest() = runTest {
-        val result = sut.doAction()
-        assertThat(result.success).isTrue()
+    fun iconTest() {
+        assertThat(sut.icon()).isEqualTo(R.drawable.ic_stop_24dp)
+    }
+
+    @Test
+    fun doActionTest() {
+        sut.doAction(object : Callback() {
+            override fun run() {
+                assertThat(result.success).isTrue()
+            }
+        })
     }
 }

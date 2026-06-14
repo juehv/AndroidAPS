@@ -39,7 +39,7 @@ fun PumpDescription.fillFor(pumpType: PumpType): PumpDescription {
     is30minBasalRatesCapable = pumpCapability.hasCapability(Capability.BasalRate30min)
     hasCustomUnreachableAlertCheck = pumpType.hasCustomUnreachableAlertCheck
     isPatchPump = pumpType.isPatchPump()
-    maxReservoirReading = pumpType.maxReservoirReading()
+    maxResorvoirReading = pumpType.maxReservoirReading()
     useHardwareLink = pumpType.useHardwareLink
 
     return this

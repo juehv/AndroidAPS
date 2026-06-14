@@ -1,6 +1,7 @@
 package app.aaps.shared.impl.di
 
 import android.content.Context
+import androidx.preference.PreferenceManager
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.L
 import app.aaps.core.interfaces.rx.AapsSchedulers
@@ -16,21 +17,17 @@ import app.aaps.shared.impl.utils.DateUtilImpl
 import dagger.Lazy
 import dagger.Module
 import dagger.Provides
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module(
     includes = [
     ]
 )
-@InstallIn(SingletonComponent::class)
 open class SharedImplModule {
 
     @Provides
     @Singleton
-    fun provideSP(context: Context): SP =
-        SPImpl(context.getSharedPreferences("${context.packageName}_preferences", Context.MODE_PRIVATE), context)
+    fun provideSP(context: Context): SP = SPImpl(PreferenceManager.getDefaultSharedPreferences(context), context)
 
     @Provides
     @Singleton

@@ -6,10 +6,10 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import app.aaps.core.interfaces.logging.AAPSLogger
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationManager
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.rx.AapsSchedulers
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.pump.eopatch.EoPatchRxBus
 import app.aaps.pump.eopatch.OsAlarmReceiver
@@ -35,7 +35,6 @@ class AlarmRegistry @Inject constructor() : IAlarmRegistry {
     @Inject lateinit var pm: PreferenceManager
     @Inject lateinit var patchConfig: PatchConfig
     @Inject lateinit var rxBus: RxBus
-    @Inject lateinit var notificationManager: NotificationManager
     @Inject lateinit var aapsLogger: AAPSLogger
     @Inject lateinit var aapsSchedulers: AapsSchedulers
     @Inject lateinit var dateUtil: DateUtil
@@ -63,11 +62,13 @@ class AlarmRegistry @Inject constructor() : IAlarmRegistry {
                         sources.add(Maybe.just(true))
                         alarms.occurred.let { occurredAlarms ->
                             if (occurredAlarms.isNotEmpty()) {
-                                sources.add(
-                                    Maybe.just(true)
-                                        .observeOn(aapsSchedulers.main)
-                                        .doOnSuccess { notificationManager.dismiss(NotificationId.EOFLOW_PATCH_ALERT) }
-                                )
+                                occurredAlarms.keys.forEach { alarmCode ->
+                                    sources.add(
+                                        Maybe.just(alarmCode)
+                                            .observeOn(aapsSchedulers.main)
+                                            .doOnSuccess { rxBus.send(EventDismissNotification(Notification.EOFLOW_PATCH_ALERTS + (alarmCode.aeCode + 10000))) }
+                                    )
+                                }
                             }
                         }
                         alarms.registered.let { registeredAlarms ->
@@ -77,12 +78,11 @@ class AlarmRegistry @Inject constructor() : IAlarmRegistry {
                                 }
                             }
                         }
-                        compositeDisposable.add(
-                            Maybe.concat(sources)
-                                .subscribe {
-                                    alarms.clear()
-                                    pm.flushAlarms()
-                                }
+                        compositeDisposable.add(Maybe.concat(sources)
+                                                    .subscribe {
+                                                        alarms.clear()
+                                                        pm.flushAlarms()
+                                                    }
                         )
                     }
 

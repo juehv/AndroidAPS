@@ -7,13 +7,10 @@ import app.aaps.database.entities.data.GlucoseUnit
 import app.aaps.database.entities.embedments.InsulinConfiguration
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.verify
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.never
 import org.mockito.kotlin.whenever
 
 class SyncNsProfileSwitchTransactionTest {
@@ -29,7 +26,7 @@ class SyncNsProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `inserts new profile switch when nsId not found and no timestamp match`() = runTest {
+    fun `inserts new profile switch when nsId not found and no timestamp match`() {
         val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", timestamp = 1000L)
 
         whenever(profileSwitchDao.findByNSId("ns-123")).thenReturn(null)
@@ -47,7 +44,7 @@ class SyncNsProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `updates nsId when timestamp matches but nsId is null`() = runTest {
+    fun `updates nsId when timestamp matches but nsId is null`() {
         val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", timestamp = 1000L)
         val existing = createProfileSwitch(id = 1, nsId = null, timestamp = 1000L)
 
@@ -66,7 +63,7 @@ class SyncNsProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `invalidates profile switch when valid becomes invalid`() = runTest {
+    fun `invalidates profile switch when valid becomes invalid`() {
         val profileSwitches = listOf(createProfileSwitch(id = 0, nsId = "ns-123", isValid = false))
         val existing = createProfileSwitch(id = 1, nsId = "ns-123", isValid = true)
 
@@ -84,75 +81,7 @@ class SyncNsProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `updates duration to shorter when duration changes`() = runTest {
-        val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", duration = 30_000L)
-        val existing = createProfileSwitch(id = 1, nsId = "ns-123", duration = 60_000L)
-
-        whenever(profileSwitchDao.findByNSId("ns-123")).thenReturn(existing)
-
-        val transaction = SyncNsProfileSwitchTransaction(listOf(profileSwitch))
-        transaction.database = database
-        val result = transaction.run()
-
-        assertThat(result.updatedDuration).hasSize(1)
-        assertThat(existing.duration).isEqualTo(30_000L)
-
-        verify(profileSwitchDao).updateExistingEntry(existing)
-    }
-
-    @Test
-    fun `does not update duration to longer`() = runTest {
-        val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", duration = 120_000L)
-        val existing = createProfileSwitch(id = 1, nsId = "ns-123", duration = 60_000L)
-
-        whenever(profileSwitchDao.findByNSId("ns-123")).thenReturn(existing)
-
-        val transaction = SyncNsProfileSwitchTransaction(listOf(profileSwitch))
-        transaction.database = database
-        val result = transaction.run()
-
-        assertThat(result.updatedDuration).isEmpty()
-        assertThat(existing.duration).isEqualTo(60_000L)
-
-        verify(profileSwitchDao, never()).updateExistingEntry(any())
-    }
-
-    @Test
-    fun `cuts permanent (duration=0) to finite when incoming is positive`() = runTest {
-        val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", duration = 60_000L)
-        val existing = createProfileSwitch(id = 1, nsId = "ns-123", duration = 0L)
-
-        whenever(profileSwitchDao.findByNSId("ns-123")).thenReturn(existing)
-
-        val transaction = SyncNsProfileSwitchTransaction(listOf(profileSwitch))
-        transaction.database = database
-        val result = transaction.run()
-
-        assertThat(result.updatedDuration).hasSize(1)
-        assertThat(existing.duration).isEqualTo(60_000L)
-
-        verify(profileSwitchDao).updateExistingEntry(existing)
-    }
-
-    @Test
-    fun `does not lengthen finite to permanent (incoming duration=0)`() = runTest {
-        val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", duration = 0L)
-        val existing = createProfileSwitch(id = 1, nsId = "ns-123", duration = 60_000L)
-
-        whenever(profileSwitchDao.findByNSId("ns-123")).thenReturn(existing)
-
-        val transaction = SyncNsProfileSwitchTransaction(listOf(profileSwitch))
-        transaction.database = database
-        val result = transaction.run()
-
-        assertThat(result.updatedDuration).isEmpty()
-        assertThat(existing.duration).isEqualTo(60_000L)
-
-        verify(profileSwitchDao, never()).updateExistingEntry(any())
-    }
-
-    @Test
-    fun `inserts new when timestamp matches but existing has different nsId`() = runTest {
+    fun `inserts new when timestamp matches but existing has different nsId`() {
         val profileSwitch = createProfileSwitch(id = 0, nsId = "ns-123", timestamp = 1000L)
         val existing = createProfileSwitch(id = 1, nsId = "other-ns", timestamp = 1000L)
 
@@ -173,8 +102,7 @@ class SyncNsProfileSwitchTransactionTest {
         id: Long,
         nsId: String?,
         timestamp: Long = System.currentTimeMillis(),
-        isValid: Boolean = true,
-        duration: Long = 0
+        isValid: Boolean = true
     ): ProfileSwitch = ProfileSwitch(
         timestamp = timestamp,
         basalBlocks = emptyList(),
@@ -185,9 +113,9 @@ class SyncNsProfileSwitchTransactionTest {
         profileName = "Test",
         timeshift = 0,
         percentage = 100,
-        duration = duration,
+        duration = 0,
         interfaceIDs_backing = InterfaceIDs(nightscoutId = nsId),
-        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L, 1.0),
+        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L),
         isValid = isValid
     ).also { it.id = id }
 }

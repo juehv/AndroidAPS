@@ -1,16 +1,18 @@
 package app.aaps.plugins.automation.triggers
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Wifi
+import android.widget.LinearLayout
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
 import app.aaps.core.utils.JsonHelper
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.Comparator
 import app.aaps.plugins.automation.elements.InputString
+import app.aaps.plugins.automation.elements.LabelWithElement
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
+import java.util.Optional
 import javax.inject.Inject
 
 class TriggerWifiSsid(injector: HasAndroidInjector) : Trigger(injector) {
@@ -41,8 +43,8 @@ class TriggerWifiSsid(injector: HasAndroidInjector) : Trigger(injector) {
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
-        val eventNetworkChange = receiverStatusStore.networkStatusFlow.value ?: return false
+    override fun shouldRun(): Boolean {
+        val eventNetworkChange = receiverStatusStore.lastNetworkEvent ?: return false
         if (!eventNetworkChange.wifiConnected && comparator.value == Comparator.Compare.IS_NOT_AVAILABLE) {
             aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
             return true
@@ -72,9 +74,15 @@ class TriggerWifiSsid(injector: HasAndroidInjector) : Trigger(injector) {
     override fun friendlyDescription(): String =
         rh.gs(R.string.wifissidcompared, rh.gs(comparator.value.stringRes), ssid.value)
 
-    override fun composeIcon() = Icons.Filled.Wifi
-    override fun composeIconTint() = IconTint.Network
+    override fun icon(): Optional<Int> = Optional.of(R.drawable.ic_network_wifi)
 
     override fun duplicate(): Trigger = TriggerWifiSsid(injector, this)
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, app.aaps.core.ui.R.string.ns_wifi_ssids, this))
+            .add(comparator)
+            .add(LabelWithElement(rh, rh.gs(app.aaps.core.ui.R.string.ns_wifi_ssids) + ": ", "", ssid))
+            .build(root)
+    }
 }

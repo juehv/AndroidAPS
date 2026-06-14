@@ -1,12 +1,14 @@
 package app.aaps.plugins.automation.actions
 
 import app.aaps.core.data.model.GlucoseUnit
+import app.aaps.core.data.model.TE
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.plugins.automation.elements.InputCarePortalMenu
 import app.aaps.plugins.automation.elements.InputDuration
 import app.aaps.plugins.automation.elements.InputString
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyLong
@@ -23,12 +25,11 @@ class ActionCarePortalEventTest : ActionsTestBase() {
         whenever(rh.gs(app.aaps.core.ui.R.string.careportal_note_message)).thenReturn("Note : %s")
         whenever(dateUtil.now()).thenReturn(0)
         whenever(profileFunction.getUnits()).thenReturn(GlucoseUnit.MGDL)
-        runTest {
-            whenever(persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(anyOrNull(), anyLong(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
-                .thenReturn(PersistenceLayer.TransactionResult())
-        }
+        whenever(persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(anyOrNull(), anyLong(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult<TE>().apply {
+            }))
         sut = ActionCarePortalEvent(injector)
-        sut.cpEvent = InputCarePortalMenu()
+        sut.cpEvent = InputCarePortalMenu(rh)
         sut.cpEvent.value = InputCarePortalMenu.EventType.NOTE
         sut.note = InputString("Asd")
         sut.duration = InputDuration(5, InputDuration.TimeUnit.MINUTES)
@@ -42,9 +43,16 @@ class ActionCarePortalEventTest : ActionsTestBase() {
         assertThat(sut.shortDescription()).isEqualTo("Note : Asd")
     }
 
-    @Test fun doActionTest() = runTest {
-        val result = sut.doAction()
-        assertThat(result.success).isTrue()
+    @Test fun iconTest() {
+        assertThat(sut.icon()).isEqualTo(app.aaps.core.objects.R.drawable.ic_cp_note_24dp)
+    }
+
+    @Test fun doActionTest() {
+        sut.doAction(object : Callback() {
+            override fun run() {
+                assertThat(result.success).isTrue()
+            }
+        })
     }
 
     @Test fun hasDialogTest() {

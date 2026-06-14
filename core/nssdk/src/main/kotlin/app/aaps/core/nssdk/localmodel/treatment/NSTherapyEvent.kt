@@ -1,11 +1,8 @@
 package app.aaps.core.nssdk.localmodel.treatment
 
 import app.aaps.core.nssdk.localmodel.entry.NsUnits
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import com.google.gson.annotations.SerializedName
 
-@Serializable
-@SerialName("NSTherapyEvent")
 data class NSTherapyEvent(
     override var date: Long?,
     override val device: String? = null,
@@ -34,9 +31,9 @@ data class NSTherapyEvent(
 ) : NSTreatment {
 
     enum class MeterType(val text: String) {
-        @com.google.gson.annotations.SerializedName("Finger") FINGER("Finger"),
-        @com.google.gson.annotations.SerializedName("Sensor") SENSOR("Sensor"),
-        @com.google.gson.annotations.SerializedName("Manual") MANUAL("Manual")
+        @SerializedName("Finger") FINGER("Finger"),
+        @SerializedName("Sensor") SENSOR("Sensor"),
+        @SerializedName("Manual") MANUAL("Manual")
         ;
 
         companion object {

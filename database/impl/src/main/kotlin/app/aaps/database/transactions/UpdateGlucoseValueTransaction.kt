@@ -7,7 +7,7 @@ import app.aaps.database.entities.GlucoseValue
  */
 class UpdateGlucoseValueTransaction(val glucoseValue: GlucoseValue) : Transaction<Unit>() {
 
-    override suspend fun run() {
+    override fun run() {
         database.glucoseValueDao.updateExistingEntry(glucoseValue)
     }
 }

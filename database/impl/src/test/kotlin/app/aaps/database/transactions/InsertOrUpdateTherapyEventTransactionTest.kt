@@ -6,7 +6,6 @@ import app.aaps.database.entities.TherapyEvent
 import app.aaps.database.entities.data.GlucoseUnit
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -28,7 +27,7 @@ class InsertOrUpdateTherapyEventTransactionTest {
     }
 
     @Test
-    fun `inserts new therapy event when id not found`() = runTest {
+    fun `inserts new therapy event when id not found`() {
         val event = createTherapyEvent(id = 1)
 
         whenever(therapyEventDao.findById(1)).thenReturn(null)
@@ -46,7 +45,7 @@ class InsertOrUpdateTherapyEventTransactionTest {
     }
 
     @Test
-    fun `updates existing therapy event when id found`() = runTest {
+    fun `updates existing therapy event when id found`() {
         val event = createTherapyEvent(id = 1)
         val existing = createTherapyEvent(id = 1)
 
@@ -65,7 +64,7 @@ class InsertOrUpdateTherapyEventTransactionTest {
     }
 
     @Test
-    fun `inserts different therapy event types`() = runTest {
+    fun `inserts different therapy event types`() {
         val types = listOf(
             TherapyEvent.Type.CANNULA_CHANGE,
             TherapyEvent.Type.INSULIN_CHANGE,
@@ -86,7 +85,7 @@ class InsertOrUpdateTherapyEventTransactionTest {
     }
 
     @Test
-    fun `transaction result has correct structure`() = runTest {
+    fun `transaction result has correct structure`() {
         val result = InsertOrUpdateTherapyEventTransaction.TransactionResult()
 
         assertThat(result.inserted).isEmpty()

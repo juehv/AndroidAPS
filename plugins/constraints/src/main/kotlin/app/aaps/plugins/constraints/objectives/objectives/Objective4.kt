@@ -21,7 +21,7 @@ class Objective4 @Inject constructor(
     init {
         tasks.add(
             object : Task(this, R.string.objectives_maxbasal) {
-                override suspend fun isCompleted(): Boolean {
+                override fun isCompleted(): Boolean {
                     val profile = profileFunction.getProfile() ?: return false
                     val maxBasalSet = preferences.getIfExists(DoubleKey.ApsMaxBasal) ?: 0.0
                     val maxDailyBasal = profile.getMaxDailyBasal()

@@ -46,22 +46,11 @@ interface StoreDataForDb {
     fun addToDeleteTreatment(payload: String): Boolean
     fun addToDeleteGlucoseValue(payload: String): Boolean
 
-    suspend fun updateDeletedGlucoseValuesInDb()
-    suspend fun storeTreatmentsToDb(fullSync: Boolean)
-    suspend fun updateDeletedTreatmentsInDb()
-    suspend fun storeGlucoseValuesToDb()
-    suspend fun storeFoodsToDb()
+    fun updateDeletedGlucoseValuesInDb()
+    fun storeTreatmentsToDb(fullSync: Boolean)
+    fun updateDeletedTreatmentsInDb()
+    fun storeGlucoseValuesToDb()
+    fun storeFoodsToDb()
     fun scheduleNsIdUpdate()
-    suspend fun updateNsIds()
-
-    /**
-     * Fire-and-forget request methods. Multiple rapid calls coalesce into a single
-     * collector run via a CONFLATED Channel — designed for WS callbacks where N
-     * arrivals only need 1 store cycle to drain the buffer.
-     */
-    fun requestStoreGlucoseValues()
-    fun requestStoreTreatments(fullSync: Boolean)
-    fun requestStoreFoods()
-    fun requestUpdateDeletedTreatments()
-    fun requestUpdateDeletedGlucoseValues()
+    fun updateNsIds()
 }

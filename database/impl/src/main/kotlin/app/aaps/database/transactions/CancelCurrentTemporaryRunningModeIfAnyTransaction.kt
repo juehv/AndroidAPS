@@ -7,9 +7,9 @@ class CancelCurrentTemporaryRunningModeIfAnyTransaction(
     val timestamp: Long
 ) : Transaction<CancelCurrentTemporaryRunningModeIfAnyTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
-        val current = database.runningModeDao.getTemporaryRunningModeActiveAt(timestamp)
+        val current = database.runningModeDao.getTemporaryRunningModeActiveAt(timestamp).blockingGet()
         if (current != null) {
             current.end = timestamp
             database.runningModeDao.updateExistingEntry(current)

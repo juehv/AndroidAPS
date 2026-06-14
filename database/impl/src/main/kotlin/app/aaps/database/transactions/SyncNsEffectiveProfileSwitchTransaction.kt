@@ -7,7 +7,7 @@ import app.aaps.database.entities.EffectiveProfileSwitch
  */
 class SyncNsEffectiveProfileSwitchTransaction(private val effectiveProfileSwitches: List<EffectiveProfileSwitch>) : Transaction<SyncNsEffectiveProfileSwitchTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
 
         for (effectiveProfileSwitch in effectiveProfileSwitches) {

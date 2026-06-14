@@ -8,25 +8,25 @@ import android.os.SystemClock
 import app.aaps.core.data.model.BS
 import app.aaps.core.data.time.T
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
-import app.aaps.core.interfaces.insulin.ConcentrationHelper
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationLevel
-import app.aaps.core.interfaces.notifications.NotificationManager
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.profile.Profile
+import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.pump.BolusProgressData
 import app.aaps.core.interfaces.pump.DetailedBolusInfo
 import app.aaps.core.interfaces.pump.DetailedBolusInfoStorage
-import app.aaps.core.interfaces.pump.PumpInsulin
 import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.AapsSchedulers
 import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventAppExit
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
+import app.aaps.core.interfaces.rx.events.EventOverviewBolusProgress
+import app.aaps.core.interfaces.rx.events.EventPreferenceChange
 import app.aaps.core.interfaces.rx.events.EventPumpStatusChanged
 import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.DateUtil
@@ -35,8 +35,6 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
-import app.aaps.pump.medtrum.ble.MedtrumBleCallback
-import app.aaps.pump.medtrum.ble.MedtrumBleTransport
 import app.aaps.pump.medtrum.code.ConnectionState
 import app.aaps.pump.medtrum.comm.enums.AlarmState
 import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
@@ -64,24 +62,19 @@ import app.aaps.pump.medtrum.comm.packets.SynchronizePacket
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
 import app.aaps.pump.medtrum.keys.MedtrumIntKey
 import app.aaps.pump.medtrum.keys.MedtrumStringKey
-import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import app.aaps.pump.medtrum.util.MedtrumSnUtil
 import dagger.android.DaggerService
 import dagger.android.HasAndroidInjector
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.kotlin.plusAssign
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import kotlin.math.abs
 
-class MedtrumService : DaggerService(), MedtrumBleCallback {
+class MedtrumService : DaggerService(), BLECommCallback {
 
     @Inject lateinit var injector: HasAndroidInjector
     @Inject lateinit var aapsLogger: AAPSLogger
@@ -89,6 +82,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     @Inject lateinit var rxBus: RxBus
     @Inject lateinit var preferences: Preferences
     @Inject lateinit var rh: ResourceHelper
+    @Inject lateinit var profileFunction: ProfileFunction
     @Inject lateinit var commandQueue: CommandQueue
     @Inject lateinit var context: Context
     @Inject lateinit var medtrumPlugin: MedtrumPlugin
@@ -96,14 +90,11 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     @Inject lateinit var activePlugin: ActivePlugin
     @Inject lateinit var constraintChecker: ConstraintsChecker
     @Inject lateinit var uiInteraction: UiInteraction
-    @Inject lateinit var notificationManager: NotificationManager
-    @Inject lateinit var bleTransport: MedtrumBleTransport
+    @Inject lateinit var bleComm: BLEComm
     @Inject lateinit var fabricPrivacy: FabricPrivacy
     @Inject lateinit var pumpSync: PumpSync
     @Inject lateinit var detailedBolusInfoStorage: DetailedBolusInfoStorage
     @Inject lateinit var dateUtil: DateUtil
-    @Inject lateinit var ch: ConcentrationHelper
-    @Inject lateinit var bolusProgressData: BolusProgressData
 
     companion object {
 
@@ -122,7 +113,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     private var currentState: State = IdleState()
     private var mPacket: MedtrumPacket? = null
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.Default)
 
     val isConnected: Boolean
         get() = medtrumPump.connectionState == ConnectionState.CONNECTED
@@ -131,85 +122,65 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
 
     override fun onCreate() {
         super.onCreate()
-        bleTransport.setMedtrumCallback(this)
+        bleComm.setCallback(this)
         disposable += rxBus
             .toObservable(EventAppExit::class.java)
             .observeOn(aapsSchedulers.io)
             .subscribe({ stopSelf() }, fabricPrivacy::logException)
-        preferences.observe(MedtrumStringNonKey.SnInput).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            aapsLogger.debug(LTag.PUMPCOMM, "Serial number changed, reporting new pump!")
-            medtrumPump.loadUserSettingsFromSP()
-            medtrumPump.deviceType = MedtrumSnUtil().getDeviceTypeFromSerial(medtrumPump.pumpSN).value
-            medtrumPump.resetPatchParameters()
-            pumpSync.connectNewPump()
-            medtrumPump.setFakeTBRIfNotSet()
-        }
-        preferences.observe(MedtrumBooleanKey.MedtrumWarningNotification).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-        }
-        preferences.observe(MedtrumIntKey.MedtrumPumpExpiryWarningHours).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-        }
-        preferences.observe(MedtrumStringKey.MedtrumAlarmSettings).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-            val r = commandQueue.setUserOptions()
-            if (medtrumPlugin.isInitialized() && !r.success) {
-                notificationManager.post(
-                    NotificationId.PUMP_SETTINGS_FAILED,
-                    R.string.pump_setting_failed,
-                )
+        disposable += rxBus
+            .toObservable(EventPreferenceChange::class.java)
+            .observeOn(aapsSchedulers.io)
+            .subscribe({ event ->
+                           if (event.isChanged(MedtrumStringKey.MedtrumSnInput.key)) {
+                               aapsLogger.debug(LTag.PUMPCOMM, "Serial number changed, reporting new pump!")
+                               medtrumPump.loadUserSettingsFromSP()
+                               medtrumPump.deviceType = MedtrumSnUtil().getDeviceTypeFromSerial(medtrumPump.pumpSN).value
+                               medtrumPump.resetPatchParameters()
+                               pumpSync.connectNewPump()
+                               medtrumPump.setFakeTBRIfNotSet()
+                           }
+                           if (event.isChanged(MedtrumBooleanKey.MedtrumWarningNotification.key)
+                               || event.isChanged(MedtrumIntKey.MedtrumPumpExpiryWarningHours.key)
+                           ) {
+                               medtrumPump.loadUserSettingsFromSP()
+                           }
+                           if (event.isChanged(MedtrumStringKey.MedtrumAlarmSettings.key)
+                               || event.isChanged(MedtrumBooleanKey.MedtrumPatchExpiration.key)
+                               || event.isChanged(MedtrumIntKey.MedtrumHourlyMaxInsulin.key)
+                               || event.isChanged(MedtrumIntKey.MedtrumDailyMaxInsulin.key)
+                           ) {
+                               medtrumPump.loadUserSettingsFromSP()
+                               commandQueue.setUserOptions(object : Callback() {
+                                   override fun run() {
+                                       if (medtrumPlugin.isInitialized() && !this.result.success) {
+                                           uiInteraction.addNotification(
+                                               Notification.PUMP_SETTINGS_FAILED,
+                                               rh.gs(R.string.pump_setting_failed),
+                                               Notification.NORMAL,
+                                           )
+                                       }
+                                   }
+                               })
+                           }
+                       }, fabricPrivacy::logException)
+        scope.launch {
+            medtrumPump.pumpStateFlow.collect { pumpState ->
+                handlePumpStateUpdate(pumpState)
             }
         }
-        preferences.observe(MedtrumBooleanKey.MedtrumPatchExpiration).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-            val r = commandQueue.setUserOptions()
-            if (medtrumPlugin.isInitialized() && !r.success) {
-                notificationManager.post(
-                    NotificationId.PUMP_SETTINGS_FAILED,
-                    R.string.pump_setting_failed,
-                )
+        scope.launch {
+            medtrumPump.connectionStateFlow.collect { connectionState ->
+                handleConnectionStateChange(connectionState)
             }
         }
-        preferences.observe(MedtrumIntKey.MedtrumHourlyMaxInsulin).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-            val r = commandQueue.setUserOptions()
-            if (medtrumPlugin.isInitialized() && !r.success) {
-                notificationManager.post(
-                    NotificationId.PUMP_SETTINGS_FAILED,
-                    R.string.pump_setting_failed,
-                )
+        scope.launch {
+            medtrumPump.pumpWarningFlow.collect { pumpWarning ->
+                notifyPumpWarning(pumpWarning)
             }
-        }
-        preferences.observe(MedtrumIntKey.MedtrumDailyMaxInsulin).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
-            medtrumPump.loadUserSettingsFromSP()
-            val r = commandQueue.setUserOptions()
-            if (medtrumPlugin.isInitialized() && !r.success) {
-                notificationManager.post(
-                    NotificationId.PUMP_SETTINGS_FAILED,
-                    R.string.pump_setting_failed,
-                )
-            }
-        }
-        medtrumPump.pumpStateFlow.collectResilient(scope, aapsLogger, LTag.PUMP) { pumpState ->
-            handlePumpStateUpdate(pumpState)
-        }
-        medtrumPump.connectionStateFlow.collectResilient(scope, aapsLogger, LTag.PUMP) { connectionState ->
-            handleConnectionStateChange(connectionState)
-        }
-        medtrumPump.pumpWarningFlow.collectResilient(scope, aapsLogger, LTag.PUMP) { pumpWarning ->
-            notifyPumpWarning(pumpWarning)
         }
         scope.launch {
             while (true) {
-                // Not a Flow, so collectResilient doesn't apply; guard the poll body so a single failure
-                // can't kill the loop and stop expiry checks for the rest of the service lifetime.
-                try {
-                    checkExpiryWarning()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    aapsLogger.error(LTag.PUMP, "checkExpiryWarning failed", e)
-                }
+                checkExpiryWarning()
                 kotlinx.coroutines.delay(CHECK_EXPIRY_WARNING_TIME_MS)
             }
         }
@@ -226,19 +197,19 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         return when (currentState) {
             is IdleState  -> {
                 medtrumPump.connectionState = ConnectionState.CONNECTING
-                bleTransport.connect(from, medtrumPump.pumpSN)
+                bleComm.connect(from, medtrumPump.pumpSN)
             }
 
             is ReadyState -> {
                 aapsLogger.error(LTag.PUMPCOMM, "Connect attempt when in ReadyState from: $from")
-                if (isConnected) {
+                return if (isConnected) {
                     aapsLogger.debug(LTag.PUMP, "connect: already connected")
                     true
                 } else {
                     aapsLogger.debug(LTag.PUMP, "connect: not connected, resetting state and trying to connect")
                     toState(IdleState())
                     medtrumPump.connectionState = ConnectionState.CONNECTING
-                    bleTransport.connect(from, medtrumPump.pumpSN)
+                    bleComm.connect(from, medtrumPump.pumpSN)
                 }
             }
 
@@ -254,15 +225,9 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     }
 
     fun startActivate(): Boolean {
-        val pumpProfile = runBlocking { pumpSync.expectedPumpState() }.profile ?: run {
-            aapsLogger.error(LTag.PUMP, "startActivate: no requested profile, cannot activate patch")
-            return false
-        }
-        val bytes = medtrumPump.buildMedtrumProfileArray(pumpProfile) ?: run {
-            aapsLogger.error(LTag.PUMP, "startActivate: failed to build basal byte array")
-            return false
-        }
-        return sendPacketAndGetResponse(ActivatePacket(injector, bytes))
+        val profile = profileFunction.getProfile()?.let { medtrumPump.buildMedtrumProfileArray(it) }
+        val packet = profile?.let { ActivatePacket(injector, it) }
+        return packet?.let { sendPacketAndGetResponse(it) } == true
     }
 
     fun deactivatePatch(): Boolean {
@@ -277,12 +242,12 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     }
 
     fun stopConnecting() {
-        bleTransport.disconnect("stopConnecting")
+        bleComm.disconnect("stopConnecting")
     }
 
     fun disconnect(from: String) {
         medtrumPump.connectionState = ConnectionState.DISCONNECTING
-        bleTransport.disconnect(from)
+        bleComm.disconnect(from)
     }
 
     fun readPumpStatus() {
@@ -308,16 +273,17 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     fun timeUpdateNotification(updateSuccess: Boolean) {
         if (updateSuccess) {
             aapsLogger.debug(LTag.PUMPCOMM, "Pump time updated")
-            notificationManager.post(
-                NotificationId.INSIGHT_DATE_TIME_UPDATED, // :---)
+            uiInteraction.addNotification(
+                Notification.INSIGHT_DATE_TIME_UPDATED, // :---)
                 rh.gs(app.aaps.core.ui.R.string.pump_time_updated),
+                Notification.INFO,
             )
         } else {
             aapsLogger.error(LTag.PUMPCOMM, "Failed to update pump time")
-            notificationManager.post(
-                NotificationId.PUMP_TIMEZONE_UPDATE_FAILED,
-                R.string.pump_time_update_failed,
-                level = NotificationLevel.IMPORTANT,
+            uiInteraction.addNotification(
+                Notification.PUMP_TIMEZONE_UPDATE_FAILED,
+                rh.gs(R.string.pump_time_update_failed),
+                Notification.URGENT,
             )
         }
     }
@@ -382,21 +348,21 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         return sendPacketAndGetResponse(SetPatchPacket(injector))
     }
 
-    suspend fun setBolus(detailedBolusInfo: DetailedBolusInfo): Boolean {
+    fun setBolus(detailedBolusInfo: DetailedBolusInfo): Boolean {
         if (!canSetBolus()) return false
 
         val insulin = detailedBolusInfo.insulin
         medtrumPump.bolusDone = false
         medtrumPump.bolusStopped = false
         medtrumPump.bolusErrorReason = null
+        BolusProgressData.delivered = 0.0
 
         if (!sendBolusCommand(insulin)) {
             medtrumPump.bolusErrorReason = rh.gs(R.string.bolus_error_reason_unable_to_send_command)
             aapsLogger.error(LTag.PUMPCOMM, "Failed to set bolus")
-            // Queue-worker deadlock guard — don't unwrap the .launch. See CommandQueue kdoc.
-            scope.launch { commandQueue.readStatus(rh.gs(R.string.bolus_error)) } // make sure if anything is delivered (which is highly unlikely at this point) we get it
+            commandQueue.readStatus(rh.gs(R.string.bolus_error), null) // make sure if anything is delivered (which is highly unlikely at this point) we get it
             medtrumPump.bolusDone = true
-            bolusProgressData.updateProgress(percent = 0, status = "")
+            BolusProgressData.delivered = 0.0
             return false
         }
 
@@ -410,7 +376,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         // Sync the initial bolus
         val newRecord = pumpSync.addBolusWithTempId(
             timestamp = detailedBolusInfo.timestamp,
-            amount = PumpInsulin(detailedBolusInfo.insulin),
+            amount = detailedBolusInfo.insulin,
             temporaryId = detailedBolusInfo.timestamp,
             type = detailedBolusInfo.bolusType,
             pumpType = medtrumPump.pumpType(),
@@ -427,11 +393,11 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
 
         waitForBolusProgress()
 
-        if (medtrumPump.bolusStopped && (bolusProgressData.state.value?.delivered?.cU ?: 0.0) == 0.0) {
+        if (medtrumPump.bolusStopped && BolusProgressData.delivered == 0.0) {
             // In this case we don't get a bolus end event, so need to remove all the stuff added previously
             val syncOk = pumpSync.syncBolusWithTempId(
                 timestamp = bolusStart,
-                amount = PumpInsulin(0.0),
+                amount = 0.0,
                 temporaryId = bolusStart,
                 type = detailedBolusInfo.bolusType,
                 pumpId = bolusStart,
@@ -455,7 +421,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
             medtrumPump.bolusErrorReason = rh.gs(R.string.bolus_error_reason_not_connected)
             return false
         }
-        if (bolusProgressData.isStopPressed) {
+        if (BolusProgressData.stopPressed) {
             aapsLogger.warn(LTag.PUMPCOMM, "Bolus stop pressed, not setting bolus")
             medtrumPump.bolusErrorReason = rh.gs(R.string.bolus_error_reason_user)
             return false
@@ -499,10 +465,10 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
                     disconnect("Communication stopped")
                 }
             } else {
-                val currentBolusAmount = bolusProgressData.state.value?.delivered ?: PumpInsulin(0.0)
-                if (currentBolusAmount.cU != lastSentBolusAmount) {
-                    bolusProgressData.updateProgress(currentBolusAmount)
-                    lastSentBolusAmount = currentBolusAmount.cU
+                val currentBolusAmount = BolusProgressData.delivered
+                if (currentBolusAmount != lastSentBolusAmount) {
+                    rxBus.send(EventOverviewBolusProgress(rh, BolusProgressData.delivered))
+                    lastSentBolusAmount = currentBolusAmount
                 }
             }
         }
@@ -517,14 +483,15 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         SystemClock.sleep(2000)
 
         // Do not call update status directly, reconnection may be needed
-        scope.launch {
-            commandQueue.loadEvents()
-            rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_bolus_status)))
-        }
+        commandQueue.loadEvents(object : Callback() {
+            override fun run() {
+                rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_bolus_status)))
+            }
+        })
     }
 
     fun stopBolus() {
-        aapsLogger.debug(LTag.PUMPCOMM, "bolusStop >>>>> @ ${bolusProgressData.state.value?.delivered?.cU ?: 0.0}")
+        aapsLogger.debug(LTag.PUMPCOMM, "bolusStop >>>>> @ ${BolusProgressData.delivered}")
         medtrumPump.bolusErrorReason = rh.gs(R.string.bolus_error_reason_user)
         if (isConnected) {
             var success = sendPacketAndGetResponse(CancelBolusPacket(injector))
@@ -549,10 +516,11 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
 
         // Get history records, this will update the previous basals
         // Do not call update status directly, reconnection may be needed
-        scope.launch {
-            commandQueue.loadEvents()
-            rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_temp_basal_status)))
-        }
+        commandQueue.loadEvents(object : Callback() {
+            override fun run() {
+                rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_temp_basal_status)))
+            }
+        })
 
         return result
     }
@@ -562,10 +530,11 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
 
         // Get history records, this will update the previous basals
         // Do not call update status directly, reconnection may be needed
-        scope.launch {
-            commandQueue.loadEvents()
-            rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_temp_basal_status)))
-        }
+        commandQueue.loadEvents(object : Callback() {
+            override fun run() {
+                rxBus.send(EventPumpStatusChanged(rh.gs(R.string.getting_temp_basal_status)))
+            }
+        })
 
         return result
     }
@@ -581,7 +550,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         if (result) result = packet?.let { sendPacketAndGetResponse(it) } == true
 
         // Get history records, this will update the pump state and add changes in TBR to AAPS history
-        scope.launch { commandQueue.loadEvents() }
+        commandQueue.loadEvents(null)
 
         return result
     }
@@ -602,11 +571,11 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
                     aapsLogger.error(LTag.PUMPCOMM, "Failed to sync record $sequence, failureCount: $failureCount")
                     if (failureCount == 1) {
                         // Show notification to alert user of failure
-                        notificationManager.post(
-                            NotificationId.PUMP_SYNC_ERROR,
-                            R.string.pump_sync_error,
-                            level = NotificationLevel.URGENT,
-                            soundRes = app.aaps.core.ui.R.raw.alarm
+                        uiInteraction.addNotificationWithSound(
+                            Notification.PUMP_SYNC_ERROR,
+                            rh.gs(R.string.pump_sync_error),
+                            Notification.URGENT,
+                            app.aaps.core.ui.R.raw.alarm
                         )
                     } else if (failureCount >= 2) {
                         break
@@ -643,27 +612,25 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         }
         if (alarmState != null && alarmState != AlarmState.NONE) {
             medtrumPump.addAlarm(alarmState)
-            runBlocking {
-                pumpSync.insertAnnouncement(
-                    medtrumPump.alarmStateToString(alarmState),
-                    null,
-                    medtrumPump.pumpType(),
-                    medtrumPump.pumpSN.toString(radix = 16)
-                )
-            }
+            pumpSync.insertAnnouncement(
+                medtrumPump.alarmStateToString(alarmState),
+                null,
+                medtrumPump.pumpType(),
+                medtrumPump.pumpSN.toString(radix = 16)
+            )
         }
 
         // Map the pump state to a notification
         when (state) {
             MedtrumPumpState.NONE,
             MedtrumPumpState.STOPPED              -> {
-                notificationManager.dismiss(NotificationId.PUMP_WARNING)
-                notificationManager.dismiss(NotificationId.PUMP_ERROR)
-                notificationManager.dismiss(NotificationId.PUMP_SUSPENDED)
-                notificationManager.post(
-                    NotificationId.PATCH_NOT_ACTIVE,
-                    R.string.patch_not_active,
-                    level = NotificationLevel.IMPORTANT,
+                rxBus.send(EventDismissNotification(Notification.PUMP_WARNING))
+                rxBus.send(EventDismissNotification(Notification.PUMP_ERROR))
+                rxBus.send(EventDismissNotification(Notification.PUMP_SUSPENDED))
+                uiInteraction.addNotification(
+                    Notification.PATCH_NOT_ACTIVE,
+                    rh.gs(R.string.patch_not_active),
+                    Notification.URGENT,
                 )
                 medtrumPump.setFakeTBRIfNotSet()
                 medtrumPump.clearAlarmState()
@@ -674,27 +641,26 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
 
             MedtrumPumpState.IDLE,
             MedtrumPumpState.FILLED               -> {
-                notificationManager.dismiss(NotificationId.PUMP_ERROR)
-                notificationManager.dismiss(NotificationId.PUMP_SUSPENDED)
+                rxBus.send(EventDismissNotification(Notification.PUMP_ERROR))
+                rxBus.send(EventDismissNotification(Notification.PUMP_SUSPENDED))
                 medtrumPump.setFakeTBRIfNotSet()
                 medtrumPump.clearAlarmState()
 
                 if (medtrumPump.patchPrimed) {
                     aapsLogger.error(LTag.PUMP, "handlePumpStateUpdate: Unexpected patch state drop while primed! state: $state")
-                    runBlocking {
-                        pumpSync.insertAnnouncement(
-                            rh.gs(R.string.patch_reset_after_primed_error),
-                            null,
-                            medtrumPump.pumpType(),
-                            medtrumPump.pumpSN.toString(radix = 16)
-                        )
-                    }
 
-                    notificationManager.post(
-                        NotificationId.PUMP_ERROR,
-                        R.string.patch_reset_after_primed_error,
-                        level = NotificationLevel.URGENT,
-                        soundRes = app.aaps.core.ui.R.raw.alarm
+                    pumpSync.insertAnnouncement(
+                        rh.gs(R.string.patch_reset_after_primed_error),
+                        null,
+                        medtrumPump.pumpType(),
+                        medtrumPump.pumpSN.toString(radix = 16)
+                    )
+
+                    uiInteraction.addNotificationWithSound(
+                        Notification.PUMP_ERROR,
+                        rh.gs(R.string.patch_reset_after_primed_error),
+                        Notification.URGENT,
+                        app.aaps.core.ui.R.raw.alarm
                     )
                 }
             }
@@ -703,17 +669,16 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
             MedtrumPumpState.PRIMED,
             MedtrumPumpState.EJECTING,
             MedtrumPumpState.EJECTED              -> {
-                notificationManager.dismiss(NotificationId.PUMP_ERROR)
-                notificationManager.dismiss(NotificationId.PUMP_SUSPENDED)
+                rxBus.send(EventDismissNotification(Notification.PUMP_ERROR))
+                rxBus.send(EventDismissNotification(Notification.PUMP_SUSPENDED))
                 medtrumPump.setFakeTBRIfNotSet()
                 medtrumPump.clearAlarmState()
             }
 
             MedtrumPumpState.ACTIVE,
             MedtrumPumpState.ACTIVE_ALT           -> {
-                notificationManager.dismiss(NotificationId.PATCH_NOT_ACTIVE)
-                notificationManager.dismiss(NotificationId.PUMP_SUSPENDED)
-                medtrumPump.clearAlarmState()
+                rxBus.send(EventDismissNotification(Notification.PATCH_NOT_ACTIVE))
+                rxBus.send(EventDismissNotification(Notification.PUMP_SUSPENDED))
             }
 
             MedtrumPumpState.LOW_BG_SUSPENDED,
@@ -721,34 +686,35 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
             MedtrumPumpState.AUTO_SUSPENDED,
             MedtrumPumpState.SUSPENDED,
             MedtrumPumpState.PAUSED               -> {
-                notificationManager.post(
-                    NotificationId.PUMP_SUSPENDED,
-                    R.string.pump_is_suspended,
+                uiInteraction.addNotification(
+                    Notification.PUMP_SUSPENDED,
+                    rh.gs(R.string.pump_is_suspended),
+                    Notification.NORMAL,
                 )
                 // Pump will report proper TBR for this from loadEvents()
-                scope.launch { commandQueue.loadEvents() }
+                commandQueue.loadEvents(null)
             }
 
             MedtrumPumpState.HOURLY_MAX_SUSPENDED -> {
-                notificationManager.post(
-                    NotificationId.PUMP_SUSPENDED,
-                    R.string.pump_is_suspended_hour_max,
-                    level = NotificationLevel.URGENT,
-                    soundRes = app.aaps.core.ui.R.raw.alarm
+                uiInteraction.addNotificationWithSound(
+                    Notification.PUMP_SUSPENDED,
+                    rh.gs(R.string.pump_is_suspended_hour_max),
+                    Notification.URGENT,
+                    app.aaps.core.ui.R.raw.alarm
                 )
                 // Pump will report proper TBR for this from loadEvents()
-                scope.launch { commandQueue.loadEvents() }
+                commandQueue.loadEvents(null)
             }
 
             MedtrumPumpState.DAILY_MAX_SUSPENDED  -> {
-                notificationManager.post(
-                    NotificationId.PUMP_SUSPENDED,
-                    R.string.pump_is_suspended_day_max,
-                    level = NotificationLevel.URGENT,
-                    soundRes = app.aaps.core.ui.R.raw.alarm
+                uiInteraction.addNotificationWithSound(
+                    Notification.PUMP_SUSPENDED,
+                    rh.gs(R.string.pump_is_suspended_day_max),
+                    Notification.URGENT,
+                    app.aaps.core.ui.R.raw.alarm
                 )
                 // Pump will report proper TBR for this from loadEvents()
-                scope.launch { commandQueue.loadEvents() }
+                commandQueue.loadEvents(null)
             }
 
             MedtrumPumpState.OCCLUSION,
@@ -759,20 +725,22 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
             MedtrumPumpState.BASE_FAULT,
             MedtrumPumpState.BATTERY_OUT,
             MedtrumPumpState.NO_CALIBRATION       -> {
-                notificationManager.dismiss(NotificationId.PATCH_NOT_ACTIVE)
-                notificationManager.dismiss(NotificationId.PUMP_SUSPENDED)
+                rxBus.send(EventDismissNotification(Notification.PATCH_NOT_ACTIVE))
+                rxBus.send(EventDismissNotification(Notification.PUMP_SUSPENDED))
                 // Pump suspended due to error, show error!
-                notificationManager.post(
-                    NotificationId.PUMP_ERROR,
-                    R.string.pump_error, alarmState?.let { medtrumPump.alarmStateToString(it) },
-                    soundRes = app.aaps.core.ui.R.raw.alarm
+                uiInteraction.addNotificationWithSound(
+                    Notification.PUMP_ERROR,
+                    rh.gs(R.string.pump_error, alarmState?.let { medtrumPump.alarmStateToString(it) }),
+                    Notification.URGENT,
+                    app.aaps.core.ui.R.raw.alarm
                 )
                 // Get pump status, use readStatus here as for loadEvents() we cannot be sure callback is executed
-                scope.launch {
-                    commandQueue.readStatus(rh.gs(app.aaps.core.ui.R.string.device_changed))
-                    // Make sure a 0 temp is set
-                    medtrumPump.setFakeTBRIfNotSet()
-                }
+                commandQueue.readStatus(rh.gs(app.aaps.core.ui.R.string.device_changed), object : Callback() {
+                    override fun run() {
+                        // Make sure a 0 temp is set
+                        medtrumPump.setFakeTBRIfNotSet()
+                    }
+                })
             }
         }
     }
@@ -791,14 +759,31 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
     private fun notifyPumpWarning(alarmState: AlarmState) {
         // Notification on pump warning
         if (medtrumPump.desiredPumpWarning && alarmState != AlarmState.NONE) {
-            notificationManager.post(
-                NotificationId.PUMP_WARNING,
-                R.string.pump_warning, medtrumPump.alarmStateToString(alarmState),
-                level = NotificationLevel.ANNOUNCEMENT,
+            uiInteraction.addNotification(
+                Notification.PUMP_WARNING,
+                rh.gs(R.string.pump_warning, medtrumPump.alarmStateToString(alarmState)),
+                Notification.ANNOUNCEMENT,
             )
-            runBlocking {
+            pumpSync.insertAnnouncement(
+                medtrumPump.alarmStateToString(alarmState),
+                null,
+                medtrumPump.pumpType(),
+                medtrumPump.pumpSN.toString(radix = 16)
+            )
+        }
+    }
+
+    private fun checkExpiryWarning() {
+        if (medtrumPump.desiredPatchExpiration && medtrumPump.desiredPumpWarning) {
+            val warningAt = medtrumPump.patchStartTime + T.hours(medtrumPump.desiredPumpWarningExpiryThresholdHours.toLong()).msecs()
+            if (dateUtil.now() >= warningAt && dateUtil.now() <= warningAt + CHECK_EXPIRY_WARNING_TIME_MS) {
+                uiInteraction.addNotification(
+                    Notification.PUMP_WARNING,
+                    rh.gs(R.string.alarm_pump_expires_soon),
+                    Notification.ANNOUNCEMENT,
+                )
                 pumpSync.insertAnnouncement(
-                    medtrumPump.alarmStateToString(alarmState),
+                    rh.gs(R.string.alarm_pump_expires_soon),
                     null,
                     medtrumPump.pumpType(),
                     medtrumPump.pumpSN.toString(radix = 16)
@@ -807,50 +792,29 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         }
     }
 
-    private fun checkExpiryWarning() {
-        if (medtrumPump.desiredPatchExpiration && medtrumPump.desiredPumpWarning) {
-            val warningAt = medtrumPump.patchStartTime + T.hours(medtrumPump.desiredPumpWarningExpiryThresholdHours.toLong()).msecs()
-            if (dateUtil.now() >= warningAt && dateUtil.now() <= warningAt + CHECK_EXPIRY_WARNING_TIME_MS) {
-                notificationManager.post(
-                    NotificationId.PUMP_WARNING,
-                    R.string.alarm_pump_expires_soon,
-                    level = NotificationLevel.ANNOUNCEMENT,
-                )
-                runBlocking {
-                    pumpSync.insertAnnouncement(
-                        rh.gs(R.string.alarm_pump_expires_soon),
-                        null,
-                        medtrumPump.pumpType(),
-                        medtrumPump.pumpSN.toString(radix = 16)
-                    )
-                }
-            }
-        }
-    }
-
-    /** MedtrumBleCallback */
-    override fun onConnected() {
-        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onConnected")
+    /** BLECommCallbacks */
+    override fun onBLEConnected() {
+        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onBLEConnected")
         currentState.onConnected()
     }
 
-    override fun onDisconnected() {
-        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onDisconnected")
+    override fun onBLEDisconnected() {
+        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onBLEDisconnected")
         currentState.onDisconnected()
     }
 
-    override fun onNotification(data: ByteArray) {
-        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onNotification ${data.contentToString()}")
-        NotificationPacket(injector).handleNotification(data)
+    override fun onNotification(notification: ByteArray) {
+        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onNotification" + notification.contentToString())
+        NotificationPacket(injector).handleNotification(notification)
     }
 
-    override fun onIndication(data: ByteArray) {
-        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onIndication ${data.contentToString()}")
-        currentState.onIndication(data)
+    override fun onIndication(indication: ByteArray) {
+        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onIndication" + indication.contentToString())
+        currentState.onIndication(indication)
     }
 
     override fun onSendMessageError(reason: String, isRetryAble: Boolean) {
-        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< onSendMessageError: $reason")
+        aapsLogger.debug(LTag.PUMPCOMM, "<<<<< error during send message $reason")
         currentState.onSendMessageError(reason, isRetryAble)
     }
 
@@ -882,7 +846,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         if (currentState is ReadyState) {
             toState(CommandState())
             mPacket = packet
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             result = currentState.waitForResponse(timeout)
             SystemClock.sleep(100)
         } else {
@@ -941,7 +905,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
             // Retry 3 times
             if (sendRetryCounter < 3 && isRetryAble) {
                 sendRetryCounter++
-                mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+                mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             } else {
                 responseHandled = true
                 responseSuccess = false
@@ -969,7 +933,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached AuthState")
             mPacket = AuthorizePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -997,7 +961,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached GetDeviceTypeState")
             mPacket = GetDeviceTypePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -1029,7 +993,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached GetTimeState")
             mPacket = GetTimePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -1064,7 +1028,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached SetTimeState")
             mPacket = SetTimePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -1092,7 +1056,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached SetTimeZoneState")
             mPacket = SetTimeZonePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -1122,7 +1086,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached SynchronizeState")
             mPacket = SynchronizePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }
@@ -1150,7 +1114,7 @@ class MedtrumService : DaggerService(), MedtrumBleCallback {
         override fun onEnter() {
             aapsLogger.debug(LTag.PUMPCOMM, "Medtrum Service reached SubscribeState")
             mPacket = SubscribePacket(injector)
-            mPacket?.getRequest()?.let { bleTransport.sendMessage(it) }
+            mPacket?.getRequest()?.let { bleComm.sendMessage(it) }
             scope.launch {
                 waitForResponse(COMMAND_CONNECTING_TIMEOUT_SEC)
             }

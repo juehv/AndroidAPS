@@ -11,7 +11,7 @@ class SyncPumpTemporaryBasalTransaction(
     private val type: TemporaryBasal.Type? // extra parameter because field is not nullable in TemporaryBasal.class
 ) : Transaction<SyncPumpTemporaryBasalTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         temporaryBasal.interfaceIDs.pumpId ?: temporaryBasal.interfaceIDs.pumpType
         ?: temporaryBasal.interfaceIDs.pumpSerial
         ?: throw IllegalStateException("Some pump ID is null")
@@ -34,7 +34,7 @@ class SyncPumpTemporaryBasalTransaction(
             }
         } else {
             val running = database.temporaryBasalDao.getTemporaryBasalActiveAtLegacy(temporaryBasal.timestamp)
-            if (running != null && temporaryBasal.timestamp > running.timestamp) {
+            if (running != null) {
                 val old = running.copy()
                 running.end = temporaryBasal.timestamp
                 running.interfaceIDs.endId = temporaryBasal.interfaceIDs.pumpId

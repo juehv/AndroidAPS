@@ -22,9 +22,10 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
 
     @BeforeEach
     fun setUp() {
-        receiverStatusStore = ReceiverStatusStoreImpl(context)
+        receiverStatusStore = ReceiverStatusStoreImpl(context, rxBus)
         chargingStateReceiver = ChargingStateReceiver().also {
             it.aapsLogger = aapsLogger
+            it.rxBus = rxBus
             it.receiverStatusStore = receiverStatusStore
         }
     }
@@ -52,7 +53,7 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
         // Assert
         assertThat(result.isCharging).isTrue()
         assertThat(result.batteryLevel).isEqualTo(75)
-        assertThat(receiverStatusStore.chargingStatusFlow.value).isEqualTo(result)
+        assertThat(receiverStatusStore.lastChargingEvent).isEqualTo(result)
     }
 
     @Test
@@ -66,7 +67,7 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
         // Assert
         assertThat(result.isCharging).isTrue()
         assertThat(result.batteryLevel).isEqualTo(30)
-        assertThat(receiverStatusStore.chargingStatusFlow.value).isEqualTo(result)
+        assertThat(receiverStatusStore.lastChargingEvent).isEqualTo(result)
     }
 
     @Test
@@ -80,7 +81,7 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
         // Assert
         assertThat(result.isCharging).isTrue()
         assertThat(result.batteryLevel).isEqualTo(90)
-        assertThat(receiverStatusStore.chargingStatusFlow.value).isEqualTo(result)
+        assertThat(receiverStatusStore.lastChargingEvent).isEqualTo(result)
     }
 
     @Test
@@ -94,7 +95,7 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
         // Assert
         assertThat(result.isCharging).isFalse()
         assertThat(result.batteryLevel).isEqualTo(50)
-        assertThat(receiverStatusStore.chargingStatusFlow.value).isEqualTo(result)
+        assertThat(receiverStatusStore.lastChargingEvent).isEqualTo(result)
     }
 
     @Test
@@ -123,6 +124,6 @@ class ChargingStateReceiverTest : TestBaseWithProfile() {
         // Assert
         assertThat(result.isCharging).isFalse()
         assertThat(result.batteryLevel).isEqualTo(0)
-        assertThat(receiverStatusStore.chargingStatusFlow.value).isEqualTo(result)
+        assertThat(receiverStatusStore.lastChargingEvent).isEqualTo(result)
     }
 }

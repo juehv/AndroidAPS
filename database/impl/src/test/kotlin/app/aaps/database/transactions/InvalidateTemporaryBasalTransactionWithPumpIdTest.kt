@@ -5,7 +5,6 @@ import app.aaps.database.daos.TemporaryBasalDao
 import app.aaps.database.entities.TemporaryBasal
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class InvalidateTemporaryBasalTransactionWithPumpIdTest {
     }
 
     @Test
-    fun `invalidates valid temporary basal by pump ids`() = runTest {
+    fun `invalidates valid temporary basal by pump ids`() {
         val pumpId = 12345L
         val pumpType = InterfaceIDs.PumpType.DANA_I
         val pumpSerial = "ABC123"
@@ -46,7 +45,7 @@ class InvalidateTemporaryBasalTransactionWithPumpIdTest {
     }
 
     @Test
-    fun `does not update already invalid temporary basal`() = runTest {
+    fun `does not update already invalid temporary basal`() {
         val pumpId = 12345L
         val pumpType = InterfaceIDs.PumpType.DANA_I
         val pumpSerial = "ABC123"
@@ -64,7 +63,7 @@ class InvalidateTemporaryBasalTransactionWithPumpIdTest {
     }
 
     @Test
-    fun `throws exception when temporary basal not found`() = runTest {
+    fun `throws exception when temporary basal not found`() {
         val pumpId = 999L
         val pumpType = InterfaceIDs.PumpType.DANA_I
         val pumpSerial = "ABC123"

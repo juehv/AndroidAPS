@@ -1,33 +1,26 @@
 package app.aaps.plugins.sync.nsclientV3.workers
 
-import android.content.Context
 import androidx.work.ListenableWorker
 import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkContinuation
 import androidx.work.WorkManager
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.aaps.core.data.time.T
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.L
-import app.aaps.core.interfaces.logging.UserEntryLogger
-import app.aaps.core.interfaces.nsclient.NSClientRepository
 import app.aaps.core.interfaces.nsclient.StoreDataForDb
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
 import app.aaps.core.interfaces.source.NSClientSource
-import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.nssdk.interfaces.NSAndroidClient
 import app.aaps.core.nssdk.localmodel.devicestatus.NSDeviceStatus
 import app.aaps.core.nssdk.remotemodel.LastModified
+import app.aaps.core.utils.receivers.DataWorkerStorage
 import app.aaps.plugins.sync.nsclient.ReceiverDelegate
 import app.aaps.plugins.sync.nsclient.data.NSDeviceStatusHandler
 import app.aaps.plugins.sync.nsclientV3.DataSyncSelectorV3
 import app.aaps.plugins.sync.nsclientV3.NSClientV3Plugin
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -52,40 +45,42 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
     @Mock lateinit var l: L
     @Mock lateinit var nsClientSource: NSClientSource
     @Mock lateinit var storeDataForDb: StoreDataForDb
-    @Mock lateinit var nsClientRepository: NSClientRepository
-    @Mock lateinit var uiInteraction: UiInteraction
-    @Mock lateinit var uel: UserEntryLogger
 
     private lateinit var nsClientV3Plugin: NSClientV3Plugin
     private lateinit var receiverDelegate: ReceiverDelegate
+    private lateinit var dataWorkerStorage: DataWorkerStorage
     private lateinit var sut: LoadDeviceStatusWorker
 
-    private fun buildSut(): LoadDeviceStatusWorker =
-        TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters) =
-                    LoadDeviceStatusWorker(appContext, workerParameters, aapsLogger, fabricPrivacy, nsClientV3Plugin, dateUtil, nsDeviceStatusHandler, nsClientRepository)
-            })
-            .build()
+    init {
+        addInjector {
+            if (it is LoadDeviceStatusWorker) {
+                it.aapsLogger = aapsLogger
+                it.fabricPrivacy = fabricPrivacy
+                it.rxBus = rxBus
+                it.context = context
+                it.dateUtil = dateUtil
+                it.nsClientV3Plugin = nsClientV3Plugin
+                it.dataWorkerStorage = dataWorkerStorage
+                it.nsDeviceStatusHandler = nsDeviceStatusHandler
+            }
+        }
+    }
 
     @BeforeEach
     fun setUp() {
-        whenever(persistenceLayer.observeChanges(anyOrNull<Class<*>>())).thenReturn(emptyFlow())
-        whenever(persistenceLayer.observeAnyChange()).thenReturn(emptyFlow())
-        whenever(receiverStatusStore.networkStatusFlow).thenReturn(MutableStateFlow(null))
-        whenever(receiverStatusStore.chargingStatusFlow).thenReturn(MutableStateFlow(null))
-        receiverDelegate = ReceiverDelegate(rh, preferences, receiverStatusStore)
+        dataWorkerStorage = DataWorkerStorage(context)
+        receiverDelegate = ReceiverDelegate(rxBus, rh, preferences, receiverStatusStore, aapsSchedulers, fabricPrivacy)
         nsClientV3Plugin = NSClientV3Plugin(
-            aapsLogger, rh, preferences, rxBus, context,
+            aapsLogger, rh, preferences, aapsSchedulers, rxBus, context, fabricPrivacy,
             receiverDelegate, config, dateUtil, dataSyncSelectorV3, persistenceLayer,
-            nsClientSource, storeDataForDb, decimalFormatter, l, nsClientRepository, uel, profileRepository
+            nsClientSource, storeDataForDb, decimalFormatter, l
         )
         nsClientV3Plugin.newestDataOnServer = LastModified(LastModified.Collections())
     }
 
     @Test
     fun `notInitializedAndroidClient returns failure`() = runTest(timeout = 30.seconds) {
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
 
         val result = sut.doWorkAndLog()
 
@@ -98,7 +93,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workManager.beginUniqueWork(anyString(), anyOrNull(), anyOrNull<OneTimeWorkRequest>())).thenReturn(workContinuation)
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
 
         val deviceStatus = NSDeviceStatus(
             date = now - 1000,
@@ -124,7 +119,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workManager.beginUniqueWork(anyString(), anyOrNull(), anyOrNull<OneTimeWorkRequest>())).thenReturn(workContinuation)
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenReturn(emptyList())
 
@@ -139,7 +134,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workManager.beginUniqueWork(anyString(), anyOrNull(), anyOrNull<OneTimeWorkRequest>())).thenReturn(workContinuation)
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         val errorMessage = "Network error"
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenThrow(RuntimeException(errorMessage))
@@ -157,7 +152,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastOperationError = "Previous error"
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenReturn(emptyList())
 
@@ -173,7 +168,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.initialLoadFinished = false
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenReturn(emptyList())
 
@@ -188,7 +183,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workManager.beginUniqueWork(anyString(), anyOrNull(), anyOrNull<OneTimeWorkRequest>())).thenReturn(workContinuation)
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenReturn(emptyList())
 
@@ -204,7 +199,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workManager.beginUniqueWork(anyString(), anyOrNull(), anyOrNull<OneTimeWorkRequest>())).thenReturn(workContinuation)
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
 
         val deviceStatus1 = NSDeviceStatus(
             date = now - 1000,
@@ -241,7 +236,7 @@ internal class LoadDeviceStatusWorkerTest : TestBaseWithProfile() {
         whenever(workContinuation.then(org.mockito.kotlin.any<OneTimeWorkRequest>())).thenReturn(workContinuation)
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.initialLoadFinished = true
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadDeviceStatusWorker>(context).build()
         whenever(nsAndroidClient.getDeviceStatusModifiedSince(anyLong()))
             .thenReturn(emptyList())
 

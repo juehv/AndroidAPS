@@ -11,9 +11,7 @@ class MsgCheckValueRv2Test : DanaRTestBase() {
     fun runTest() {
         val packet = MsgCheckValueV2(injector)
         // test message decoding
-        val array = createArray(34, 3.toByte())
-        array[7] = 2.toByte() // protocol (at buffOffset=1 + 6) must be 2 to avoid reset branch
-        packet.handleMessage(array)
+        packet.handleMessage(createArray(34, 3.toByte()))
         Assertions.assertEquals(DanaPump.EXPORT_MODEL, danaPump.hwModel)
     }
 }

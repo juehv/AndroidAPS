@@ -16,8 +16,10 @@ import app.aaps.database.entities.interfaces.TraceableDBEntry
         childColumns = ["referenceId"]
     )],
     indices = [
+        Index("id"),
         Index("nightscoutId"),
-        Index("referenceId")
+        Index("referenceId"),
+        Index("isValid")
     ]
 )
 data class Food(

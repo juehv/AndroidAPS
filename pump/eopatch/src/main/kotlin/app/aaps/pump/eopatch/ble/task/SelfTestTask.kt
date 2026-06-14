@@ -15,19 +15,20 @@ import io.reactivex.rxjava3.functions.Predicate
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class SelfTestTask @Inject constructor() : TaskBase(TaskFunc.SELF_TEST) {
 
-    @Inject lateinit var temperatureGet: GetTemperature
-    @Inject lateinit var batteryLevelGetBeforePriming: GetVoltageLevelB4Priming
-    @Inject lateinit var getGlobalTime: GetGlobalTime
+    private val TEMPERATURE_GET: GetTemperature = GetTemperature()
+    private val BATTERY_LEVEL_GET_BEFORE_PRIMING: GetVoltageLevelB4Priming = GetVoltageLevelB4Priming()
+    private val GET_GLOBAL_TIME: GetGlobalTime = GetGlobalTime()
 
     fun start(): Single<PatchSelfTestResult> {
         val tasks: Single<PatchSelfTestResult> = Single.concat<PatchSelfTestResult>(
             listOf<Single<PatchSelfTestResult>>(
-                temperatureGet.get().map<PatchSelfTestResult>(Function { obj: TemperatureResponse -> obj.result }),
-                batteryLevelGetBeforePriming.get().map<PatchSelfTestResult>(Function { obj: BatteryVoltageLevelPairingResponse -> obj.result }),
-                getGlobalTime.get(false).map<PatchSelfTestResult>(Function { obj: GlobalTimeResponse -> obj.result })
+                TEMPERATURE_GET.get().map<PatchSelfTestResult>(Function { obj: TemperatureResponse -> obj.result }),
+                BATTERY_LEVEL_GET_BEFORE_PRIMING.get().map<PatchSelfTestResult>(Function { obj: BatteryVoltageLevelPairingResponse -> obj.result }),
+                GET_GLOBAL_TIME.get(false).map<PatchSelfTestResult>(Function { obj: GlobalTimeResponse -> obj.result })
             )
         )
             .filter(Predicate { result: PatchSelfTestResult -> result != PatchSelfTestResult.TEST_SUCCESS })

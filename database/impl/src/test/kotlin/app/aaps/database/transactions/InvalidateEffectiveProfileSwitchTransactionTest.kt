@@ -7,7 +7,6 @@ import app.aaps.database.entities.data.GlucoseUnit
 import app.aaps.database.entities.embedments.InsulinConfiguration
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -29,7 +28,7 @@ class InvalidateEffectiveProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `invalidates valid effective profile switch`() = runTest {
+    fun `invalidates valid effective profile switch`() {
         val eps = createEffectiveProfileSwitch(id = 1, isValid = true)
 
         whenever(effectiveProfileSwitchDao.findById(1)).thenReturn(eps)
@@ -45,7 +44,7 @@ class InvalidateEffectiveProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `does not update already invalid effective profile switch`() = runTest {
+    fun `does not update already invalid effective profile switch`() {
         val eps = createEffectiveProfileSwitch(id = 1, isValid = false)
 
         whenever(effectiveProfileSwitchDao.findById(1)).thenReturn(eps)
@@ -60,7 +59,7 @@ class InvalidateEffectiveProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `throws exception when effective profile switch not found`() = runTest {
+    fun `throws exception when effective profile switch not found`() {
         whenever(effectiveProfileSwitchDao.findById(999)).thenReturn(null)
 
         val transaction = InvalidateEffectiveProfileSwitchTransaction(id = 999)
@@ -92,6 +91,6 @@ class InvalidateEffectiveProfileSwitchTransactionTest {
         originalEnd = 0,
         isValid = isValid,
         interfaceIDs_backing = InterfaceIDs(),
-        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L, 1.0)
+        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L)
     ).also { it.id = id }
 }

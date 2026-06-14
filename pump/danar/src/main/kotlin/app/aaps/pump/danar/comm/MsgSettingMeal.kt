@@ -1,8 +1,8 @@
 package app.aaps.pump.danar.comm
 
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationLevel
+import app.aaps.core.interfaces.notifications.Notification
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
 import dagger.android.HasAndroidInjector
 
 class MsgSettingMeal(
@@ -32,14 +32,14 @@ class MsgSettingMeal(
             danaPump.basalStep = 0.01
         }
         if (danaPump.basalStep != 0.01) {
-            notificationManager.post(NotificationId.WRONG_BASAL_STEP, app.aaps.pump.dana.R.string.danar_setbasalstep001, level = NotificationLevel.IMPORTANT)
+            uiInteraction.addNotification(Notification.WRONG_BASAL_STEP, rh.gs(app.aaps.pump.dana.R.string.danar_setbasalstep001), Notification.URGENT)
         } else {
-            notificationManager.dismiss(NotificationId.WRONG_BASAL_STEP)
+            rxBus.send(EventDismissNotification(Notification.WRONG_BASAL_STEP))
         }
         if (danaPump.isConfigUD) {
-            notificationManager.post(NotificationId.UD_MODE_ENABLED, app.aaps.pump.dana.R.string.danar_switchtouhmode)
+            uiInteraction.addNotification(Notification.UD_MODE_ENABLED, rh.gs(app.aaps.pump.dana.R.string.danar_switchtouhmode), Notification.URGENT)
         } else {
-            notificationManager.dismiss(NotificationId.UD_MODE_ENABLED)
+            rxBus.send(EventDismissNotification(Notification.UD_MODE_ENABLED))
         }
     }
 }

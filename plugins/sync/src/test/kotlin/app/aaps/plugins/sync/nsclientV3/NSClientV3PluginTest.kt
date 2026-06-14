@@ -22,16 +22,14 @@ import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.data.time.T
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.insulin.Insulin
 import app.aaps.core.interfaces.logging.L
-import app.aaps.core.interfaces.logging.UserEntryLogger
 import app.aaps.core.interfaces.nsclient.NSAlarm
-import app.aaps.core.interfaces.nsclient.NSClientRepository
 import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.pump.VirtualPump
 import app.aaps.core.interfaces.source.NSClientSource
 import app.aaps.core.interfaces.sync.DataSyncSelector
 import app.aaps.core.interfaces.sync.NsClient
-import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.nssdk.interfaces.NSAndroidClient
 import app.aaps.core.nssdk.localmodel.treatment.CreateUpdateResponse
@@ -42,12 +40,6 @@ import app.aaps.plugins.sync.nsclientV3.keys.NsclientStringKey
 import app.aaps.plugins.sync.nsclientV3.services.NSClientV3Service
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.BeforeEach
@@ -71,11 +63,9 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
     @Mock lateinit var virtualPump: VirtualPump
     @Mock lateinit var mockedProfileFunction: ProfileFunction
     @Mock lateinit var persistenceLayer: PersistenceLayer
+    @Mock lateinit var insulin: Insulin
     @Mock lateinit var l: L
     @Mock lateinit var nsClientV3Service: NSClientV3Service
-    @Mock lateinit var nsClientRepository: NSClientRepository
-    @Mock lateinit var uiInteraction: UiInteraction
-    @Mock lateinit var uel: UserEntryLogger
 
     private lateinit var storeDataForDb: StoreDataForDbImpl
     private lateinit var sut: NSClientV3Plugin
@@ -84,20 +74,18 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
 
     @BeforeEach
     fun prepare() {
-        whenever(persistenceLayer.observeChanges(anyOrNull<Class<*>>())).thenReturn(emptyFlow())
-        whenever(persistenceLayer.observeAnyChange()).thenReturn(emptyFlow())
-        whenever(receiverDelegate.connectivityStatusFlow).thenReturn(MutableStateFlow(ReceiverDelegate.ConnectivityStatus("", allowed = false, connected = false)))
         whenever(insulin.iCfg).thenReturn(insulinConfiguration)
-        storeDataForDb = StoreDataForDbImpl(aapsLogger, persistenceLayer, preferences, config, virtualPump, nsClientRepository, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+        whenever(activePlugin.activeInsulin).thenReturn(insulin)
+        storeDataForDb = StoreDataForDbImpl(aapsLogger, rxBus, persistenceLayer, preferences, config, nsClientSource, virtualPump)
         sut =
             NSClientV3Plugin(
-                aapsLogger, rh, preferences, rxBus, context,
+                aapsLogger, rh, preferences, aapsSchedulers, rxBus, context, fabricPrivacy,
                 receiverDelegate, config, dateUtil, dataSyncSelectorV3, persistenceLayer,
-                nsClientSource, storeDataForDb, decimalFormatter, l, nsClientRepository, uel, profileRepository
+                nsClientSource, storeDataForDb, decimalFormatter, l
             )
         sut.nsAndroidClient = nsAndroidClient
         sut.nsClientV3Service = nsClientV3Service
-        runBlocking { whenever(mockedProfileFunction.getProfile(anyLong())).thenReturn(effectiveProfile) }
+        whenever(mockedProfileFunction.getProfile(anyLong())).thenReturn(validProfile)
     }
 
     @Test
@@ -196,8 +184,7 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
                 pumpId = 11000,
                 pumpType = PumpType.DANA_I,
                 pumpSerial = "bbbb"
-            ),
-            iCfg = someICfg
+            )
         )
         val dataPair = DataSyncSelector.PairBolus(bolus, 1000)
         // create
@@ -296,19 +283,19 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
         val profileSwitch = EPS(
             timestamp = 10000,
             isValid = true,
-            basalBlocks = effectiveProfile.basalBlocks,
-            isfBlocks = effectiveProfile.isfBlocks,
-            icBlocks = effectiveProfile.icBlocks,
-            targetBlocks = effectiveProfile.targetBlocks,
-            glucoseUnit = effectiveProfile.units,
+            basalBlocks = validProfile.basalBlocks,
+            isfBlocks = validProfile.isfBlocks,
+            icBlocks = validProfile.icBlocks,
+            targetBlocks = validProfile.targetBlocks,
+            glucoseUnit = validProfile.units,
             originalProfileName = "SomeProfile",
             originalCustomizedName = "SomeProfile (150%, 1h)",
             originalTimeshift = 3600000,
             originalPercentage = 150,
             originalDuration = 3600000,
             originalEnd = 0,
-            iCfg = insulin.iCfg.also {
-                it.insulinEndTime = (effectiveProfile.iCfg.dia * 3600 * 1000).toLong()
+            iCfg = activePlugin.activeInsulin.iCfg.also {
+                it.insulinEndTime = (validProfile.dia * 3600 * 1000).toLong()
             },
             ids = IDs(
                 nightscoutId = "nightscoutId",
@@ -334,17 +321,17 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
         val profileSwitch = PS(
             timestamp = 10000,
             isValid = true,
-            basalBlocks = effectiveProfile.basalBlocks,
-            isfBlocks = effectiveProfile.isfBlocks,
-            icBlocks = effectiveProfile.icBlocks,
-            targetBlocks = effectiveProfile.targetBlocks,
-            glucoseUnit = effectiveProfile.units,
+            basalBlocks = validProfile.basalBlocks,
+            isfBlocks = validProfile.isfBlocks,
+            icBlocks = validProfile.icBlocks,
+            targetBlocks = validProfile.targetBlocks,
+            glucoseUnit = validProfile.units,
             profileName = "SomeProfile",
             timeshift = 0,
             percentage = 100,
             duration = 0,
-            iCfg = insulin.iCfg.also {
-                it.insulinEndTime = (effectiveProfile.iCfg.dia * 3600 * 1000).toLong()
+            iCfg = activePlugin.activeInsulin.iCfg.also {
+                it.insulinEndTime = (validProfile.dia * 3600 * 1000).toLong()
             },
             ids = IDs(
                 nightscoutId = "nightscoutId",
@@ -522,7 +509,14 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `resetToFullSync should clear sync timestamps and reset initialLoadFinished flag`() = runTest {
+    fun preferenceScreenTest() {
+        val screen = preferenceManager.createPreferenceScreen(context)
+        sut.addPreferenceScreen(preferenceManager, screen, context, null)
+        assertThat(screen.preferenceCount).isGreaterThan(0)
+    }
+
+    @Test
+    fun `resetToFullSync should clear sync timestamps and reset initialLoadFinished flag`() {
         // Arrange
         // 1. Set the plugin's state to a "synced" status to ensure the reset works.
         sut.initialLoadFinished = true
@@ -702,6 +696,7 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
         // Assert
         // Verify that the call was passed through to the nsClientV3Service with the correct parameters.
         verify(nsClientV3Service).handleClearAlarm(mockAlarm, silenceDuration)
+        sut.setPluginEnabledBlocking(PluginType.SYNC, false)
     }
 
     @Test

@@ -16,7 +16,6 @@ fun UserEntry.Sources.fromDb(): Sources =
         UserEntry.Sources.LoopDialog          -> Sources.LoopDialog
         UserEntry.Sources.TempBasalDialog     -> Sources.TempBasalDialog
         UserEntry.Sources.CalibrationDialog   -> Sources.CalibrationDialog
-        UserEntry.Sources.ConcentrationDialog -> Sources.ConcentrationDialog
         UserEntry.Sources.FillDialog          -> Sources.FillDialog
         UserEntry.Sources.SiteRotationDialog  -> Sources.SiteRotationDialog
         UserEntry.Sources.BgCheck             -> Sources.BgCheck
@@ -42,13 +41,10 @@ fun UserEntry.Sources.fromDb(): Sources =
         UserEntry.Sources.Glunovo             -> Sources.Glunovo
         UserEntry.Sources.Intelligo           -> Sources.Intelligo
         UserEntry.Sources.Xdrip               -> Sources.Xdrip
-        UserEntry.Sources.Insulin             -> Sources.Insulin
-        UserEntry.Sources.Ottai               -> Sources.Ottai
-        UserEntry.Sources.SyaiTag             -> Sources.SyaiTag
-        UserEntry.Sources.SiBionic            -> Sources.SiBionic
-        UserEntry.Sources.Sino                -> Sources.Sino
-        UserEntry.Sources.Instara             -> Sources.Instara
-        UserEntry.Sources.NotificationReader  -> Sources.NotificationReader
+        UserEntry.Sources.Ottai    -> Sources.Ottai
+        UserEntry.Sources.SyaiTag  -> Sources.SyaiTag
+        UserEntry.Sources.SiBionic -> Sources.SiBionic
+        UserEntry.Sources.Sino     -> Sources.Sino
         UserEntry.Sources.LocalProfile        -> Sources.LocalProfile
         UserEntry.Sources.Loop                -> Sources.Loop
         UserEntry.Sources.Maintenance         -> Sources.Maintenance
@@ -76,7 +72,6 @@ fun UserEntry.Sources.fromDb(): Sources =
         UserEntry.Sources.VirtualPump         -> Sources.VirtualPump
         UserEntry.Sources.Random              -> Sources.Random
         UserEntry.Sources.SMS                 -> Sources.SMS
-        UserEntry.Sources.NfcCommands         -> Sources.NfcCommands
         UserEntry.Sources.Treatments          -> Sources.Treatments
         UserEntry.Sources.Wear                -> Sources.Wear
         UserEntry.Sources.Food                -> Sources.Food
@@ -86,7 +81,6 @@ fun UserEntry.Sources.fromDb(): Sources =
         UserEntry.Sources.Aaps                -> Sources.Aaps
         UserEntry.Sources.BgFragment          -> Sources.BgFragment
         UserEntry.Sources.Garmin              -> Sources.Garmin
-        UserEntry.Sources.Scene               -> Sources.Scene
         UserEntry.Sources.Database            -> Sources.Database
         UserEntry.Sources.Unknown             -> Sources.Unknown
     }
@@ -104,7 +98,6 @@ fun Sources.toDb(): UserEntry.Sources =
         Sources.LoopDialog          -> UserEntry.Sources.LoopDialog
         Sources.TempBasalDialog     -> UserEntry.Sources.TempBasalDialog
         Sources.CalibrationDialog   -> UserEntry.Sources.CalibrationDialog
-        Sources.ConcentrationDialog -> UserEntry.Sources.ConcentrationDialog
         Sources.FillDialog          -> UserEntry.Sources.FillDialog
         Sources.SiteRotationDialog  -> UserEntry.Sources.SiteRotationDialog
         Sources.BgCheck             -> UserEntry.Sources.BgCheck
@@ -130,12 +123,10 @@ fun Sources.toDb(): UserEntry.Sources =
         Sources.Glunovo             -> UserEntry.Sources.Glunovo
         Sources.Intelligo           -> UserEntry.Sources.Intelligo
         Sources.Xdrip               -> UserEntry.Sources.Xdrip
-        Sources.Ottai               -> UserEntry.Sources.Ottai
-        Sources.SyaiTag             -> UserEntry.Sources.SyaiTag
-        Sources.SiBionic            -> UserEntry.Sources.SiBionic
-        Sources.Sino                -> UserEntry.Sources.Sino
-        Sources.Instara             -> UserEntry.Sources.Instara
-        Sources.NotificationReader  -> UserEntry.Sources.NotificationReader
+        Sources.Ottai    -> UserEntry.Sources.Ottai
+        Sources.SyaiTag  -> UserEntry.Sources.SyaiTag
+        Sources.SiBionic -> UserEntry.Sources.SiBionic
+        Sources.Sino     -> UserEntry.Sources.Sino
         Sources.LocalProfile        -> UserEntry.Sources.LocalProfile
         Sources.Loop                -> UserEntry.Sources.Loop
         Sources.Maintenance         -> UserEntry.Sources.Maintenance
@@ -163,7 +154,6 @@ fun Sources.toDb(): UserEntry.Sources =
         Sources.VirtualPump         -> UserEntry.Sources.VirtualPump
         Sources.Random              -> UserEntry.Sources.Random
         Sources.SMS                 -> UserEntry.Sources.SMS
-        Sources.NfcCommands         -> UserEntry.Sources.NfcCommands
         Sources.Treatments          -> UserEntry.Sources.Treatments
         Sources.Wear                -> UserEntry.Sources.Wear
         Sources.Food                -> UserEntry.Sources.Food
@@ -173,9 +163,7 @@ fun Sources.toDb(): UserEntry.Sources =
         Sources.Aaps                -> UserEntry.Sources.Aaps
         Sources.BgFragment          -> UserEntry.Sources.BgFragment
         Sources.Garmin              -> UserEntry.Sources.Garmin
-        Sources.Scene               -> UserEntry.Sources.Scene
         Sources.Database            -> UserEntry.Sources.Database
-        Sources.Insulin             -> UserEntry.Sources.Insulin
         Sources.Unknown             -> UserEntry.Sources.Unknown
     }
 

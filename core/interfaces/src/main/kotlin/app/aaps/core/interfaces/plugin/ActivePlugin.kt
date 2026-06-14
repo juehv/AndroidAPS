@@ -1,16 +1,15 @@
 package app.aaps.core.interfaces.plugin
 
-import android.content.Context
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.interfaces.aps.APS
 import app.aaps.core.interfaces.aps.Sensitivity
-import app.aaps.core.interfaces.calibration.Calibration
 import app.aaps.core.interfaces.constraints.Objectives
 import app.aaps.core.interfaces.constraints.Safety
+import app.aaps.core.interfaces.insulin.Insulin
 import app.aaps.core.interfaces.iob.IobCobCalculator
-
+import app.aaps.core.interfaces.overview.Overview
+import app.aaps.core.interfaces.profile.ProfileSource
 import app.aaps.core.interfaces.pump.Pump
-import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.smoothing.Smoothing
 import app.aaps.core.interfaces.source.BgSource
 import app.aaps.core.interfaces.sync.NsClient
@@ -25,28 +24,40 @@ interface ActivePlugin {
     val activeBgSource: BgSource
 
     /**
+     *  Currently selected Profile plugin
+     *  Default LocalProfile
+     */
+    val activeProfileSource: ProfileSource
+
+    /**
+     *  Currently selected Insulin plugin
+     *  Default RapidActing
+     */
+    val activeInsulin: Insulin
+
+    /**
      *  Currently selected APS plugin
-     *  Default SMB. Null during early startup before plugin initialization.
+     *  Default SMB
      */
-    val activeAPS: APS?
+    val activeAPS: APS
 
     /**
-     *  PumpWithConcentration should pass data to real Pump plugin if U100 is used
-     *  or do proper recalculation if other concentration is used (U20, U50, U200 etc)
+     *  Currently selected Pump plugin
+     *  Default VirtualPump
      */
-    val activePump: PumpWithConcentration
-
-    /**
-     *  PumpWithConcentration should pass data to real Pump plugin if U100 is used
-     *  or do proper recalculation if other concentration is used (U20, U50, U200 etc)
-     */
-    val activePumpInternal: Pump
+    val activePump: Pump
 
     /**
      *  Currently selected Sensitivity plugin
      *  Default Oref1
      */
     val activeSensitivity: Sensitivity
+
+    /**
+     *  Currently selected Overview plugin
+     *  Always OverviewPlugin
+     */
+    val activeOverview: Overview
 
     /**
      *  Currently selected Safety plugin
@@ -69,12 +80,6 @@ interface ActivePlugin {
      *  Smoothing plugin
      */
     val activeSmoothing: Smoothing
-
-    /**
-     *  Calibration plugin (per-sensor override on top of factory-calibrated values).
-     *  Defaults to no-op when no override plugin is enabled.
-     */
-    val activeCalibration: Calibration
 
     /**
      *  Currently selected NsClient plugin
@@ -141,16 +146,4 @@ interface ActivePlugin {
      * See: [app.aaps.core.interfaces.maintenance.ImportExportPrefs.doImportSharedPreferences]
      */
     fun afterImport()
-
-    /**
-     * Collects missing permissions across all enabled plugins, deduplicated by permission set.
-     */
-    fun collectMissingPermissions(context: Context): List<PermissionGroup>
-
-    /**
-     * Collects all required permissions (both global and plugin-declared),
-     * regardless of grant status. Used by the permission UI to show both
-     * granted and missing permissions.
-     */
-    fun collectAllPermissions(context: Context): List<PermissionGroup>
 }

@@ -3,10 +3,11 @@ package app.aaps.pump.eopatch.ble.task
 import android.os.SystemClock
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
-import app.aaps.core.interfaces.di.ApplicationScope
+import app.aaps.core.data.ue.ValueWithUnit
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.logging.UserEntryLogger
 import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.core.interfaces.queue.Command
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.pump.eopatch.core.api.BasalStop
@@ -18,22 +19,20 @@ import io.reactivex.rxjava3.functions.Function
 import io.reactivex.rxjava3.functions.Function3
 import io.reactivex.rxjava3.functions.Predicate
 import io.reactivex.rxjava3.subjects.BehaviorSubject
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class StopBasalTask @Inject constructor(
     private val commandQueue: CommandQueue,
     private val pumpSync: PumpSync,
     private val uel: UserEntryLogger,
-    private val updateConnectionTask: UpdateConnectionTask,
-    @ApplicationScope private val appScope: CoroutineScope
+    private val updateConnectionTask: UpdateConnectionTask
 ) : TaskBase(TaskFunc.STOP_BASAL) {
 
-    @Inject lateinit var basalStop: BasalStop
+    private val BASAL_STOP: BasalStop = BasalStop()
     private val bolusCheckSubject = BehaviorSubject.create<Boolean>()
     private val extBolusCheckSubject = BehaviorSubject.create<Boolean>()
     private val basalCheckSubject = BehaviorSubject.create<Boolean>()
@@ -52,36 +51,42 @@ class StopBasalTask @Inject constructor(
 
     fun stop(): Single<BasalStopResponse> {
         if (commandQueue.isRunning(Command.CommandType.BOLUS)) {
-            uel.log(Action.CANCEL_BOLUS, Sources.EOPatch2, "", ArrayList())
+            uel.log(Action.CANCEL_BOLUS, Sources.EOPatch2, "", ArrayList<ValueWithUnit>())
             commandQueue.cancelAllBoluses(null)
             SystemClock.sleep(650)
         }
         bolusCheckSubject.onNext(true)
 
-        appScope.launch {
-            if (pumpSync.expectedPumpState().extendedBolus != null) {
-                uel.log(Action.CANCEL_EXTENDED_BOLUS, Sources.EOPatch2, "", ArrayList())
-                commandQueue.cancelExtended()
-            }
+        if (pumpSync.expectedPumpState().extendedBolus != null) {
+            uel.log(Action.CANCEL_EXTENDED_BOLUS, Sources.EOPatch2, "", ArrayList<ValueWithUnit>())
+            commandQueue.cancelExtended(object : Callback() {
+                override fun run() {
+                    extBolusCheckSubject.onNext(true)
+                }
+            })
+        } else {
             extBolusCheckSubject.onNext(true)
         }
 
-        appScope.launch {
-            if (pumpSync.expectedPumpState().temporaryBasal != null) {
-                uel.log(Action.CANCEL_TEMP_BASAL, Sources.EOPatch2, "", ArrayList())
-                commandQueue.cancelTempBasal(enforceNew = true)
-            }
+        if (pumpSync.expectedPumpState().temporaryBasal != null) {
+            uel.log(Action.CANCEL_TEMP_BASAL, Sources.EOPatch2, "", ArrayList<ValueWithUnit>())
+            commandQueue.cancelTempBasal(true, callback = object : Callback() {
+                override fun run() {
+                    basalCheckSubject.onNext(true)
+                }
+            })
+        } else {
             basalCheckSubject.onNext(true)
         }
 
-        return Observable.zip(
+        return Observable.zip<Boolean, Boolean, Boolean, Boolean>(
             getBolusSubject(),
             getExtBolusSubject(),
             getBasalSubject(),
             Function3 { bolusReady: Boolean, extBolusReady: Boolean, basalReady: Boolean -> (bolusReady && extBolusReady && basalReady) })
             .filter(Predicate { ready: Boolean -> ready })
-            .flatMap(Function { isReady() })
-            .concatMapSingle(Function { basalStop.stop() })
+            .flatMap<TaskFunc>(Function { isReady() })
+            .concatMapSingle<BasalStopResponse>(Function { BASAL_STOP.stop() })
             .doOnNext(Consumer { response: BasalStopResponse -> this.checkResponse(response) })
             .doOnNext(Consumer { updateConnectionTask.enqueue() })
             .firstOrError()

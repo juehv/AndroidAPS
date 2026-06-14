@@ -4,7 +4,6 @@ import app.aaps.database.DelegatedAppDatabase
 import app.aaps.database.daos.APSResultDao
 import app.aaps.database.entities.APSResult
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,7 +26,7 @@ class InsertOrUpdateApsResultTransactionTest {
     }
 
     @Test
-    fun `inserts new APS result when id not found`() = runTest {
+    fun `inserts new APS result when id not found`() {
         val apsResult = createApsResult(id = 1, targetBG = 100.0)
 
         whenever(apsResultDao.findById(1)).thenReturn(null)
@@ -45,7 +44,7 @@ class InsertOrUpdateApsResultTransactionTest {
     }
 
     @Test
-    fun `updates existing APS result when id found`() = runTest {
+    fun `updates existing APS result when id found`() {
         val apsResult = createApsResult(id = 1, targetBG = 110.0)
         val existing = createApsResult(id = 1, targetBG = 100.0)
 
@@ -64,7 +63,7 @@ class InsertOrUpdateApsResultTransactionTest {
     }
 
     @Test
-    fun `updates target BG value`() = runTest {
+    fun `updates target BG value`() {
         val existing = createApsResult(id = 1, targetBG = 90.0)
         val updated = createApsResult(id = 1, targetBG = 120.0)
 
@@ -81,7 +80,7 @@ class InsertOrUpdateApsResultTransactionTest {
     }
 
     @Test
-    fun `inserts APS result with rate`() = runTest {
+    fun `inserts APS result with rate`() {
         val apsResult = createApsResult(id = 1, targetBG = 100.0, rate = 0.85)
 
         whenever(apsResultDao.findById(1)).thenReturn(null)

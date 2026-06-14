@@ -1,7 +1,6 @@
 package app.aaps.plugins.automation.triggers
 
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONException
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
@@ -13,7 +12,7 @@ class TriggerConnectorTest : TriggerTestBase() {
     val oneItem =
         "{\"data\":{\"connectorType\":\"AND\",\"triggerList\":[\"{\\\"data\\\":{\\\"connectorType\\\":\\\"AND\\\",\\\"triggerList\\\":[]},\\\"type\\\":\\\"TriggerConnector\\\"}\"]},\"type\":\"TriggerConnector\"}"
 
-    @Test fun testTriggerList() = runTest {
+    @Test fun testTriggerList() {
         val t = TriggerConnector(injector)
         val t2 = TriggerConnector(injector)
         val t3 = TriggerConnector(injector)
@@ -30,7 +29,7 @@ class TriggerConnectorTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isTrue()
     }
 
-    @Test fun testListTriggerOR() = runTest {
+    @Test fun testListTriggerOR() {
         val t = TriggerConnector(injector, TriggerConnector.Type.OR)
         t.list.add(TriggerDummy(injector))
         t.list.add(TriggerDummy(injector))
@@ -40,7 +39,7 @@ class TriggerConnectorTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isTrue()
     }
 
-    @Test fun testListTriggerXOR() = runTest {
+    @Test fun testListTriggerXOR() {
         val t = TriggerConnector(injector, TriggerConnector.Type.XOR)
         t.list.add(TriggerDummy(injector))
         t.list.add(TriggerDummy(injector))
@@ -53,7 +52,7 @@ class TriggerConnectorTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isFalse()
     }
 
-    @Test fun testListTriggerAND() = runTest {
+    @Test fun testListTriggerAND() {
         val t = TriggerConnector(injector, TriggerConnector.Type.AND)
         t.list.add(TriggerDummy(injector, true))
         t.list.add(TriggerDummy(injector, true))
@@ -63,14 +62,14 @@ class TriggerConnectorTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isFalse()
     }
 
-    @Test fun toJSONTest() = runTest {
+    @Test fun toJSONTest() {
         val t = TriggerConnector(injector)
         assertThat(t.toJSON()).isEqualTo(empty)
         t.list.add(TriggerConnector(injector))
         assertThat(t.toJSON()).isEqualTo(oneItem)
     }
 
-    @Test @Throws(JSONException::class) fun fromJSONTest() = runTest {
+    @Test @Throws(JSONException::class) fun fromJSONTest() {
         val t = TriggerConnector(injector)
         t.list.add(TriggerConnector(injector))
         val t2 = TriggerDummy(injector).instantiate(JSONObject(t.toJSON())) as TriggerConnector

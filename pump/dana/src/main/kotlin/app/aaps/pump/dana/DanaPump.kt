@@ -13,11 +13,8 @@ import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.pump.dana.keys.DanaIntNonKey
-import app.aaps.pump.dana.keys.DanaStringNonKey
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import app.aaps.pump.dana.keys.DanaIntKey
+import app.aaps.pump.dana.keys.DanaStringKey
 import org.joda.time.DateTime
 import org.joda.time.DateTimeZone
 import org.json.JSONArray
@@ -60,16 +57,10 @@ class DanaPump @Inject constructor(
         }
     }
 
-    private val _lastConnectionFlow = MutableStateFlow(0L)
-    val lastConnectionFlow: StateFlow<Long> = _lastConnectionFlow.asStateFlow()
-    var lastConnection: Long
-        get() = lastConnectionFlow.value
-        set(value) {
-            _lastConnectionFlow.value = value
-        }
+    var lastConnection: Long = 0
     var lastSettingsRead: Long = 0
     var readHistoryFrom: Long = 0 // start next history read from this timestamp
-    @Volatile var historyDoneReceived: Boolean = false // true when last history message is received
+    var historyDoneReceived: Boolean = false // true when last history message is received
 
     // Info
     var serialNumber = ""
@@ -119,39 +110,11 @@ class DanaPump @Inject constructor(
     var bolusStep = 0.1
     var basalStep = 0.1
     var iob = 0.0
-    private val _reservoirRemainingUnitsFlow = MutableStateFlow(0.0)
-    val reservoirRemainingUnitsFlow: StateFlow<Double> = _reservoirRemainingUnitsFlow.asStateFlow()
-    var reservoirRemainingUnits: Double
-        get() = reservoirRemainingUnitsFlow.value
-        set(value) {
-            _reservoirRemainingUnitsFlow.value = value
-        }
-
-    private val _batteryRemainingFlow = MutableStateFlow<Int?>(null)
-    val batteryRemainingFlow: StateFlow<Int?> = _batteryRemainingFlow.asStateFlow()
-    var batteryRemaining: Int?
-        get() = batteryRemainingFlow.value
-        set(value) {
-            _batteryRemainingFlow.value = value
-        }
-
+    var reservoirRemainingUnits = 0.0
+    var batteryRemaining: Int? = null
     var bolusBlocked = false
-
-    private val _lastBolusTimeFlow = MutableStateFlow<Long?>(null)
-    val lastBolusTimeFlow: StateFlow<Long?> = _lastBolusTimeFlow.asStateFlow()
-    var lastBolusTime: Long?
-        get() = lastBolusTimeFlow.value
-        set(value) {
-            _lastBolusTimeFlow.value = value
-        }
-
-    private val _lastBolusAmountFlow = MutableStateFlow<Double?>(null)
-    val lastBolusAmountFlow: StateFlow<Double?> = _lastBolusAmountFlow.asStateFlow()
-    var lastBolusAmount: Double?
-        get() = lastBolusAmountFlow.value
-        set(value) {
-            _lastBolusAmountFlow.value = value
-        }
+    var lastBolusTime: Long = 0
+    var lastBolusAmount = 0.0
     var currentBasal = 0.0
 
     /*
@@ -211,11 +174,11 @@ class DanaPump @Inject constructor(
             extendedBolusDuration = 0L
             extendedBolusAmount = 0.0
         }
-    val extendedBolusPassedMinutes: Int
+    private val extendedBolusPassedMinutes: Int
         get() = T.msecs(max(0, dateUtil.now() - extendedBolusStart)).mins().toInt()
     val extendedBolusRemainingMinutes: Int
         get() = max(T.msecs(extendedBolusStart + extendedBolusDuration - dateUtil.now()).mins().toInt(), 0)
-    val extendedBolusDurationInMinutes: Int
+    private val extendedBolusDurationInMinutes: Int
         get() = T.msecs(extendedBolusDuration).mins().toInt()
     var extendedBolusAbsoluteRate: Double
         get() = extendedBolusAmount * T.hours(1).msecs() / extendedBolusDuration
@@ -421,11 +384,11 @@ class DanaPump @Inject constructor(
     }
 
     val isPasswordOK: Boolean
-        get() = password == preferences.get(DanaIntNonKey.Password)
+        get() = password == preferences.get(DanaIntKey.Password)
 
     val isRSPasswordOK: Boolean
         get() = rsPassword.equals(
-            preferences.get(DanaStringNonKey.Password),
+            preferences.get(DanaStringKey.Password),
             ignoreCase = true
         ) || ignoreUserPassword
 
@@ -434,27 +397,6 @@ class DanaPump @Inject constructor(
         lastConnection = 0
         lastSettingsRead = 0
         readHistoryFrom = 0
-        serialNumber = ""
-        hwModel = 0
-        protocol = 0
-        productCode = 0
-        dailyTotalUnits = 0.0
-        maxDailyTotalUnits = 0
-        bolusStep = 0.1
-        basalStep = 0.1
-        activeProfile = 0
-        reservoirRemainingUnits = 0.0
-        batteryRemaining = null
-        lastBolusTime = null
-        lastBolusAmount = null
-        currentBasal = 0.0
-        iob = 0.0
-        tempBasalStart = 0
-        tempBasalDuration = 0
-        tempBasalPercent = 0
-        extendedBolusStart = 0
-        extendedBolusDuration = 0
-        extendedBolusAmount = 0.0
     }
 
     fun modelFriendlyName(): String =

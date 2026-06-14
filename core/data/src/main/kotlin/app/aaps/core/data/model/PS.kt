@@ -11,7 +11,7 @@ data class PS(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     var basalBlocks: List<Block>,
     var isfBlocks: List<Block>,
@@ -23,9 +23,8 @@ data class PS(
     var percentage: Int, // 1 ~ XXX [%]
     /** Duration in milliseconds */
     var duration: Long,
-    /** Applied insulin configuration */
     var iCfg: ICfg
-) : HasIDs, TimeStamped {
+) : HasIDs {
 
     fun copy(): PS =
         PS(
@@ -57,8 +56,7 @@ data class PS(
             profileName == other.profileName &&
             timeshift == other.timeshift &&
             percentage == other.percentage &&
-            duration == other.duration &&
-            iCfg == other.iCfg
+            duration == other.duration
 
     fun onlyNsIdAdded(previous: PS): Boolean =
         previous.id != id &&

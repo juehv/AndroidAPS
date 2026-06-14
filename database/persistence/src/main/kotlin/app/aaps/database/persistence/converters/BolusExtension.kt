@@ -16,7 +16,7 @@ fun Bolus.fromDb(): BS =
         type = this.type.fromDb(),
         notes = this.notes,
         isBasalInsulin = this.isBasalInsulin,
-        iCfg = this.insulinConfiguration.fromDb(),
+        icfg = this.insulinConfiguration?.fromDb(),
         ids = this.interfaceIDs.fromDb()
     )
 
@@ -33,7 +33,7 @@ fun BS.toDb(): Bolus =
         type = this.type.toDb(),
         notes = this.notes,
         isBasalInsulin = this.isBasalInsulin,
-        insulinConfiguration = this.iCfg.toDb(),
+        insulinConfiguration = this.icfg?.toDb(),
         interfaceIDs_backing = this.ids.toDb()
     )
 

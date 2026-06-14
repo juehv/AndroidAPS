@@ -5,7 +5,6 @@ import app.aaps.database.daos.TemporaryBasalDao
 import app.aaps.database.entities.TemporaryBasal
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class UpdateNsIdTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `updates NS ID when different`() = runTest {
+    fun `updates NS ID when different`() {
         val newNsId = "new-ns-123"
         val current = createTemporaryBasal(id = 1, nsId = "old-ns")
         val update = createTemporaryBasal(id = 1, nsId = newNsId)
@@ -45,7 +44,7 @@ class UpdateNsIdTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `does not update when NS ID is same`() = runTest {
+    fun `does not update when NS ID is same`() {
         val sameNsId = "same-ns"
         val current = createTemporaryBasal(id = 1, nsId = sameNsId)
         val update = createTemporaryBasal(id = 1, nsId = sameNsId)
@@ -62,7 +61,7 @@ class UpdateNsIdTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `skips when temporary basal not found`() = runTest {
+    fun `skips when temporary basal not found`() {
         val update = createTemporaryBasal(id = 999, nsId = "new-ns")
 
         whenever(temporaryBasalDao.findById(999)).thenReturn(null)

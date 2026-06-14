@@ -1,5 +1,6 @@
 package app.aaps.pump.medtronic.comm.history.pump
 
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.utils.pump.ByteUtil
 import app.aaps.pump.medtronic.MedtronicTestBase
 import app.aaps.pump.medtronic.comm.history.RawHistoryPage
@@ -9,12 +10,15 @@ import app.aaps.pump.medtronic.util.MedtronicUtil
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.Mock
 
 /**
  * Created by andy on 11/1/18.
  */
 @Suppress("SpellCheckingInspection")
 class MedtronicPumpHistoryDecoderUTest : MedtronicTestBase() {
+
+    @Mock lateinit var uiInteraction: UiInteraction
 
     private lateinit var medtronicPumpStatus: MedtronicPumpStatus
 
@@ -23,7 +27,7 @@ class MedtronicPumpHistoryDecoderUTest : MedtronicTestBase() {
 
     @BeforeEach fun setup() {
         medtronicPumpStatus = MedtronicPumpStatus(preferences, rxBus, rileyLinkUtil)
-        medtronicUtil = MedtronicUtil(aapsLogger, rxBus, rileyLinkUtil, medtronicPumpStatus, notificationManager)
+        medtronicUtil = MedtronicUtil(aapsLogger, rxBus, rileyLinkUtil, medtronicPumpStatus, uiInteraction)
         decoder = MedtronicPumpHistoryDecoder(aapsLogger, medtronicUtil)
     }
 

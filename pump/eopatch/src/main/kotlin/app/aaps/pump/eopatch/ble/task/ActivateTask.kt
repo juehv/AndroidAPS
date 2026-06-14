@@ -12,16 +12,17 @@ import io.reactivex.rxjava3.schedulers.Schedulers
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class ActivateTask @Inject constructor(
     val startBasalTask: StartNormalBasalTask
 ) : TaskBase(TaskFunc.ACTIVATE) {
 
-    @Inject lateinit var setKey: SetKey
+    private val SET_KEY = SetKey()
 
     fun start(): Single<Boolean> {
         return isReady()
-            .concatMapSingle<PatchBooleanResponse>(Function { setKey.setKey() })
+            .concatMapSingle<PatchBooleanResponse>(Function { SET_KEY.setKey() })
             .doOnNext(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
             .firstOrError()
             .observeOn(Schedulers.io())

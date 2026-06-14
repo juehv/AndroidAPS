@@ -45,19 +45,19 @@ interface Loop {
     var closedLoopEnabled: Constraint<Boolean>?
 
     /**
-     * Current running mode (queries persistence — must be called from a coroutine).
+     * Current running mode
      */
-    suspend fun runningMode(): RM.Mode
+    val runningMode: RM.Mode
 
     /**
-     * Current running mode (queries persistence — must be called from a coroutine).
+     * Current running mode
      */
-    suspend fun runningModeRecord(): RM
+    val runningModeRecord: RM
 
     /**
      * Allowed next (following) modes according to current running mode
      */
-    suspend fun allowedNextModes(): List<RM.Mode>
+    fun allowedNextModes(): List<RM.Mode>
 
     /**
      * Handle RunningMode change
@@ -65,7 +65,7 @@ interface Loop {
      * @param durationInMinutes Duration for new mode in minutes
      * @return true if change is successful
      */
-    suspend fun handleRunningModeChange(newRM: RM.Mode, action: Action, source: Sources, listValues: List<ValueWithUnit> = emptyList(), durationInMinutes: Int = 0, profile: Profile): Boolean
+    fun handleRunningModeChange(newRM: RM.Mode, action: Action, source: Sources, listValues: List<ValueWithUnit> = emptyList(), durationInMinutes: Int = 0, profile: Profile): Boolean
 
     /**
      * Timestamp of last loop run triggered by new BG
@@ -79,17 +79,17 @@ interface Loop {
      * @param allowNotification Allow notification to be sent (false in open loop mode)
      * @param tempBasalFallback true if called from failed SMB
      */
-    suspend fun invoke(initiator: String, allowNotification: Boolean, tempBasalFallback: Boolean = false)
+    fun invoke(initiator: String, allowNotification: Boolean, tempBasalFallback: Boolean = false)
 
     /**
      * Open loop mode trigger
      */
-    suspend fun acceptChangeRequest()
+    fun acceptChangeRequest()
 
     /**
      * Returns minutes to end of suspended loop
      */
-    suspend fun minutesToEndOfSuspend(): Int
+    fun minutesToEndOfSuspend(): Int
 
     fun disableCarbSuggestions(durationMinutes: Int)
 

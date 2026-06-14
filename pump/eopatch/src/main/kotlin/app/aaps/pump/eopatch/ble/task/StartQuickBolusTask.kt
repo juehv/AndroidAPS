@@ -13,12 +13,13 @@ import java.lang.Exception
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class StartQuickBolusTask @Inject constructor() : BolusTask(TaskFunc.START_QUICK_BOLUS) {
 
-    @Inject lateinit var nowBolusStart: BolusStart
-    @Inject lateinit var extBolusStart: ExtBolusStart
-    @Inject lateinit var comboBolusStart: ComboBolusStart
+    private val NOW_BOLUS_START: BolusStart = BolusStart()
+    private val EXT_BOLUS_START: ExtBolusStart = ExtBolusStart()
+    private val COMBO_BOLUS_START: ComboBolusStart = ComboBolusStart()
 
     fun start(
         nowDoseU: Float, exDoseU: Float,
@@ -36,11 +37,11 @@ class StartQuickBolusTask @Inject constructor() : BolusTask(TaskFunc.START_QUICK
         exDuration: BolusExDuration
     ): Single<out BolusResponse> {
         return if (nowDoseU > 0 && exDoseU > 0) {
-            comboBolusStart.start(nowDoseU, exDoseU, exDuration.minute)
+            COMBO_BOLUS_START.start(nowDoseU, exDoseU, exDuration.minute)
         } else if (exDoseU > 0) {
-            extBolusStart.start(exDoseU, exDuration.minute)
+            EXT_BOLUS_START.start(exDoseU, exDuration.minute)
         } else {
-            nowBolusStart.start(nowDoseU)
+            NOW_BOLUS_START.start(nowDoseU)
         }
     }
 

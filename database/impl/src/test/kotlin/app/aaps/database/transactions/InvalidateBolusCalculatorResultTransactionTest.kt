@@ -5,7 +5,6 @@ import app.aaps.database.daos.BolusCalculatorResultDao
 import app.aaps.database.entities.BolusCalculatorResult
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class InvalidateBolusCalculatorResultTransactionTest {
     }
 
     @Test
-    fun `invalidates valid bolus calculator result`() = runTest {
+    fun `invalidates valid bolus calculator result`() {
         val bcr = createBolusCalculatorResult(id = 1, isValid = true)
 
         whenever(bolusCalculatorResultDao.findById(1)).thenReturn(bcr)
@@ -43,7 +42,7 @@ class InvalidateBolusCalculatorResultTransactionTest {
     }
 
     @Test
-    fun `does not update already invalid bolus calculator result`() = runTest {
+    fun `does not update already invalid bolus calculator result`() {
         val bcr = createBolusCalculatorResult(id = 1, isValid = false)
 
         whenever(bolusCalculatorResultDao.findById(1)).thenReturn(bcr)
@@ -58,7 +57,7 @@ class InvalidateBolusCalculatorResultTransactionTest {
     }
 
     @Test
-    fun `throws exception when bolus calculator result not found`() = runTest {
+    fun `throws exception when bolus calculator result not found`() {
         whenever(bolusCalculatorResultDao.findById(999)).thenReturn(null)
 
         val transaction = InvalidateBolusCalculatorResultTransaction(id = 999)

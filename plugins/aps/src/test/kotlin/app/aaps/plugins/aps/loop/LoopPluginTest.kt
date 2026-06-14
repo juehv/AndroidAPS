@@ -2,6 +2,7 @@ package app.aaps.plugins.aps.loop
 
 import android.app.NotificationManager
 import android.content.Context
+import androidx.preference.PreferenceManager
 import app.aaps.core.data.model.RM
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.pump.defs.PumpDescription
@@ -13,19 +14,18 @@ import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.UserEntryLogger
 import app.aaps.core.interfaces.nsclient.ProcessedDeviceStatusData
+import app.aaps.core.interfaces.plugin.PluginDescription
 import app.aaps.core.interfaces.pump.PumpStatusProvider
-import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
 import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.HardLimits
 import app.aaps.core.nssdk.interfaces.RunningConfiguration
 import app.aaps.core.objects.constraints.ConstraintObject
+import app.aaps.pump.virtual.VirtualPumpPlugin
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyLong
@@ -42,9 +42,9 @@ class LoopPluginTest : TestBaseWithProfile() {
 
     @Mock lateinit var constraintChecker: ConstraintsChecker
     @Mock lateinit var commandQueue: CommandQueue
-    @Mock lateinit var virtualPumpPlugin: PumpWithConcentration
+    @Mock lateinit var virtualPumpPlugin: VirtualPumpPlugin
     @Mock lateinit var receiverStatusStore: ReceiverStatusStore
-    @Mock lateinit var androidNotificationManager: NotificationManager
+    @Mock lateinit var notificationManager: NotificationManager
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var uel: UserEntryLogger
     @Mock lateinit var runningConfiguration: RunningConfiguration
@@ -53,17 +53,17 @@ class LoopPluginTest : TestBaseWithProfile() {
     @Mock lateinit var pumpStatusProvider: PumpStatusProvider
 
     private lateinit var loopPlugin: LoopPlugin
-    private val testScope = CoroutineScope(Dispatchers.Unconfined)
 
     @BeforeEach fun prepare() {
         whenever(config.APS).thenReturn(true)
+        preferenceManager = PreferenceManager(context)
         loopPlugin = LoopPlugin(
-            aapsLogger, rxBus, preferences, config,
-            constraintChecker, rh, profileFunction, context, commandQueue, activePlugin, processedTbrEbData, receiverStatusStore, fabricPrivacy, dateUtil, uel,
-            persistenceLayer, runningConfiguration, uiInteraction, notificationManager, pumpEnactResultProvider, processedDeviceStatusData, pumpStatusProvider, decimalFormatter, ch, testScope
+            aapsLogger, aapsSchedulers, rxBus, preferences, config,
+            constraintChecker, rh, profileFunction, context, commandQueue, activePlugin, virtualPumpPlugin, iobCobCalculator, processedTbrEbData, receiverStatusStore, fabricPrivacy, dateUtil, uel,
+            persistenceLayer, runningConfiguration, uiInteraction, pumpEnactResultProvider, processedDeviceStatusData, pumpStatusProvider
         )
         whenever(activePlugin.activePump).thenReturn(virtualPumpPlugin)
-        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE)).thenReturn(androidNotificationManager)
+        whenever(context.getSystemService(Context.NOTIFICATION_SERVICE)).thenReturn(notificationManager)
     }
 
     @Test
@@ -73,10 +73,13 @@ class LoopPluginTest : TestBaseWithProfile() {
 //        whenever(preferences.get(StringKey.LoopApsMode)).thenReturn(ApsMode.CLOSED.name)
         val pumpDescription = PumpDescription()
         whenever(virtualPumpPlugin.pumpDescription).thenReturn(pumpDescription)
+        assertThat(loopPlugin.pluginDescription.fragmentClass).isEqualTo(LoopFragment::class.java.name)
         assertThat(loopPlugin.getType()).isEqualTo(PluginType.LOOP)
         assertThat(loopPlugin.name).isEqualTo("Loop")
         assertThat(loopPlugin.nameShort).isEqualTo("LOOP")
+        assertThat(loopPlugin.hasFragment()).isTrue()
         assertThat(loopPlugin.showInList(PluginType.LOOP)).isTrue()
+        assertThat(loopPlugin.preferencesId.toLong()).isEqualTo(PluginDescription.PREFERENCE_SCREEN)
 
         // Plugin is enabled by default
         assertThat(loopPlugin.isEnabled()).isTrue()
@@ -85,10 +88,15 @@ class LoopPluginTest : TestBaseWithProfile() {
         virtualPumpPlugin.pumpDescription.isTempBasalCapable = false
         assertThat(loopPlugin.specialEnableCondition()).isFalse()
         virtualPumpPlugin.pumpDescription.isTempBasalCapable = true
+
+        // Fragment is hidden by default
+        assertThat(loopPlugin.isFragmentVisible()).isFalse()
+        loopPlugin.setFragmentVisible(PluginType.LOOP, true)
+        assertThat(loopPlugin.isFragmentVisible()).isTrue()
     }
 
     @Test
-    fun iobShouldBeLimited() = runTest {
+    fun iobShouldBeLimited() {
         whenever(rh.gs(app.aaps.core.ui.R.string.lowglucosesuspend)).thenReturn("Low Glucose Suspend")
         whenever(rh.gs(app.aaps.core.ui.R.string.limiting_iob, HardLimits.MAX_IOB_LGS, rh.gs(app.aaps.core.ui.R.string.lowglucosesuspend))).thenReturn("Limiting IOB to %1\$.1f U because of %2\$s")
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -108,7 +116,14 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `minutesToEndOfSuspend returns 0 when loop is not suspended`() = runTest {
+    fun preferenceScreenTest() {
+        val screen = preferenceManager.createPreferenceScreen(context)
+        loopPlugin.addPreferenceScreen(preferenceManager, screen, context, null)
+        assertThat(screen.preferenceCount).isGreaterThan(0)
+    }
+
+    @Test
+    fun `minutesToEndOfSuspend returns 0 when loop is not suspended`() {
         // Arrange
         val now = 1672531200000L // Jan 1, 2023
         val runningMode = RM(mode = RM.Mode.CLOSED_LOOP, timestamp = now, duration = 0)
@@ -127,7 +142,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `minutesToEndOfSuspend returns remaining minutes for a temporary suspension`() = runTest {
+    fun `minutesToEndOfSuspend returns remaining minutes for a temporary suspension`() {
         // Arrange
         val startTime = 1672531200000L // Start of suspend
         val durationMins = 30L
@@ -151,7 +166,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `minutesToEndOfSuspend returns Int_MAX_VALUE for an indefinite suspension`() = runTest {
+    fun `minutesToEndOfSuspend returns Int_MAX_VALUE for an indefinite suspension`() {
         // Arrange
         val now = 1672531200000L
         // A non-temporary suspend has a duration of 0
@@ -168,7 +183,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `minutesToEndOfSuspend returns 0 when temporary suspension has just ended`() = runTest {
+    fun `minutesToEndOfSuspend returns 0 when temporary suspension has just ended`() {
         // Arrange
         val startTime = 1672531200000L
         val durationMins = 30L
@@ -190,7 +205,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         assertThat(result).isEqualTo(0)
     }
 
-    private fun mockCurrentMode(mode: RM.Mode) = runTest {
+    private fun mockCurrentMode(mode: RM.Mode) {
         val now = 1672531200000L
         val runningMode = RM(mode = mode, timestamp = now, duration = 0)
         whenever(dateUtil.now()).thenReturn(now)
@@ -198,7 +213,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes returns emptyList if profile is invalid`() = runTest {
+    fun `allowedNextModes returns emptyList if profile is invalid`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(false)
         mockCurrentMode(RM.Mode.OPEN_LOOP) // Any mode
@@ -211,7 +226,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes for OPEN_LOOP returns correct base list`() = runTest {
+    fun `allowedNextModes for OPEN_LOOP returns correct base list`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -234,7 +249,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes for CLOSED_LOOP returns correct base list`() = runTest {
+    fun `allowedNextModes for CLOSED_LOOP returns correct base list`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -258,7 +273,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes for SUSPENDED_BY_USER returns correct base list`() = runTest {
+    fun `allowedNextModes for SUSPENDED_BY_USER returns correct base list`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -277,7 +292,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes for DISCONNECTED_PUMP returns correct base list`() = runTest {
+    fun `allowedNextModes for DISCONNECTED_PUMP returns correct base list`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -295,14 +310,14 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes removes looping modes when loop invocation is not allowed`() = runTest {
+    fun `allowedNextModes removes looping modes when loop invocation is not allowed`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isClosedLoopAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
         mockCurrentMode(RM.Mode.OPEN_LOOP)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(false, aapsLogger))
         whenever(persistenceLayer.insertOrUpdateRunningMode(any(), any(), any(), anyOrNull(), any()))
-            .thenReturn(PersistenceLayer.TransactionResult())
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         val expectedModes = listOf(
             // OPEN_LOOP, CLOSED_LOOP, and CLOSED_LOOP_LGS should be removed
             RM.Mode.DISABLED_LOOP,
@@ -319,7 +334,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `allowedNextModes removes CLOSED_LOOP when closed loop is not allowed`() = runTest {
+    fun `allowedNextModes removes CLOSED_LOOP when closed loop is not allowed`() {
         // Arrange
         whenever(profileFunction.isProfileValid(any())).thenReturn(true)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -344,7 +359,7 @@ class LoopPluginTest : TestBaseWithProfile() {
 
     // region Tests for runningModePreCheck (via public runningModeRecord property)
 
-    private fun setupForPreCheck() = runTest {
+    private fun setupForPreCheck() {
         // Default setup: All constraints pass, pump is not suspended.
         whenever(activePlugin.activePump.isSuspended()).thenReturn(false)
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(true, aapsLogger))
@@ -353,19 +368,19 @@ class LoopPluginTest : TestBaseWithProfile() {
 
         // Mock the database calls
         whenever(persistenceLayer.insertOrUpdateRunningMode(any(), any(), any(), anyOrNull(), any()))
-            .thenReturn(PersistenceLayer.TransactionResult())
+            .thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
         // Default the active mode to prevent nulls. The mockCurrentMode helper will override this.
         mockCurrentMode(RM(mode = RM.Mode.DISABLED_LOOP, timestamp = dateUtil.now(), duration = 0))
     }
 
     // Helper to mock what the DB returns for the *current* active mode
-    private fun mockCurrentMode(mode: RM) = runTest {
+    private fun mockCurrentMode(mode: RM) {
         whenever(persistenceLayer.getRunningModeActiveAt(any())).thenReturn(mode)
     }
 
     @Test
-    fun `runningModeRecord forces SUSPENDED_BY_PUMP when pump is suspended`() = runTest {
+    fun `runningModeRecord forces SUSPENDED_BY_PUMP when pump is suspended`() {
         // Arrange
         setupForPreCheck()
         // The current mode in the DB is CLOSED_LOOP, but the pump reports it's suspended
@@ -373,7 +388,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         whenever(activePlugin.activePump.isSuspended()).thenReturn(true)
 
         // Act
-        loopPlugin.runningModeRecord() // Accessing the property triggers the pre-check
+        loopPlugin.runningModeRecord // Accessing the property triggers the pre-check
 
         // Assert
         val modeCaptor = argumentCaptor<RM>()
@@ -390,7 +405,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `runningModeRecord reverts from SUSPENDED_BY_PUMP when pump is resumed`() = runTest {
+    fun `runningModeRecord reverts from SUSPENDED_BY_PUMP when pump is resumed`() {
         // Arrange
         setupForPreCheck()
         val suspendedByPumpMode = RM(mode = RM.Mode.SUSPENDED_BY_PUMP, timestamp = dateUtil.now() - T.mins(5).msecs(), duration = 0)
@@ -405,7 +420,7 @@ class LoopPluginTest : TestBaseWithProfile() {
             .thenReturn(previousMode)
 
         // Act
-        loopPlugin.runningModeRecord() // Accessing the property triggers the pre-check
+        loopPlugin.runningModeRecord // Accessing the property triggers the pre-check
 
         // Assert
         val modeCaptor = argumentCaptor<RM>()
@@ -424,7 +439,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `runningModeRecord forces DISABLED_LOOP when loop invocation is denied`() = runTest {
+    fun `runningModeRecord forces DISABLED_LOOP when loop invocation is denied`() {
         // Arrange
         setupForPreCheck()
         // The current mode is OPEN_LOOP, but a constraint now forbids looping
@@ -432,7 +447,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         whenever(constraintChecker.isLoopInvocationAllowed()).thenReturn(ConstraintObject(false, aapsLogger))
 
         // Act
-        loopPlugin.runningModeRecord()
+        loopPlugin.runningModeRecord
 
         // Assert
         val modeCaptor = argumentCaptor<RM>()
@@ -448,7 +463,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `runningModeRecord forces OPEN_LOOP when closed loop is denied`() = runTest {
+    fun `runningModeRecord forces OPEN_LOOP when closed loop is denied`() {
         // Arrange
         setupForPreCheck()
         // The current mode is CLOSED_LOOP, but a constraint now forbids it
@@ -456,7 +471,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         whenever(constraintChecker.isClosedLoopAllowed()).thenReturn(ConstraintObject(false, aapsLogger))
 
         // Act
-        loopPlugin.runningModeRecord()
+        loopPlugin.runningModeRecord
 
         // Assert
         val modeCaptor = argumentCaptor<RM>()
@@ -472,7 +487,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `runningModeRecord reverts from forced OPEN_LOOP when constraints pass again`() = runTest {
+    fun `runningModeRecord reverts from forced OPEN_LOOP when constraints pass again`() {
         // Arrange
         setupForPreCheck()
         // The current mode is an auto-forced OPEN_LOOP
@@ -488,7 +503,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         whenever(rh.gs(app.aaps.core.ui.R.string.mode_reverted)).thenReturn("Mode reverted")
 
         // Act
-        loopPlugin.runningModeRecord()
+        loopPlugin.runningModeRecord
 
         // Assert
         val modeCaptor = argumentCaptor<RM>()
@@ -505,7 +520,7 @@ class LoopPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `runningModeRecord does nothing if state is consistent`() = runTest {
+    fun `runningModeRecord does nothing if state is consistent`() {
         // Arrange
         setupForPreCheck()
         // The current mode is consistent with all constraints
@@ -513,7 +528,7 @@ class LoopPluginTest : TestBaseWithProfile() {
         // All constraints are passing and pump is not suspended (from default setup)
 
         // Act
-        loopPlugin.runningModeRecord()
+        loopPlugin.runningModeRecord
 
         // Assert
         // Verify that no *new* running mode was inserted.

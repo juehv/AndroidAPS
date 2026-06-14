@@ -17,18 +17,13 @@ import javax.inject.Singleton
 @Singleton
 class QuickWizardSource @Inject constructor(private val context: Context, private val sp: SP, private val aapsLogger: AAPSLogger) : TileSource {
 
-    companion object {
-        const val COOLDOWN_MILLIS = 3_600_000L // 1 hour
-    }
-
     override fun getSelectedActions(): List<Action> {
         val quickList = mutableListOf<Action>()
         val quickMap = getQuickWizardData(sp)
         val sfm = secondsFromMidnight()
-        val now = System.currentTimeMillis()
 
         for (quick in quickMap.entries) {
-            val isActive = sfm in quick.validFrom..quick.validTo && now - quick.lastUsed > COOLDOWN_MILLIS
+            val isActive = sfm in quick.validFrom..quick.validTo
             if (isActive && quick.guid.isNotEmpty()) {
                 quickList.add(
                     Action(
@@ -53,25 +48,18 @@ class QuickWizardSource @Inject constructor(private val context: Context, privat
         if (quickMap.entries.isEmpty()) return null
 
         val sfm = secondsFromMidnight()
-        val now = System.currentTimeMillis()
         var validTill = 24 * 60 * 60
 
         for (quick in quickMap.entries) {
-            val onCooldown = now - quick.lastUsed <= COOLDOWN_MILLIS
-            val isActive = sfm in quick.validFrom..quick.validTo && !onCooldown
+            val isActive = sfm in quick.validFrom..quick.validTo
             if (quick.guid.isNotEmpty()) {
                 if (isActive && validTill > quick.validTo) validTill = quick.validTo
                 if (quick.validFrom in (sfm + 1) until validTill) validTill = quick.validFrom
-                // If entry is on cooldown but within time window, refresh when cooldown expires
-                if (onCooldown && sfm in quick.validFrom..quick.validTo) {
-                    val cooldownRemainingSecs = ((quick.lastUsed + COOLDOWN_MILLIS - now) / 1000).toInt()
-                    val cooldownExpirySfm = sfm + cooldownRemainingSecs
-                    if (cooldownExpirySfm in (sfm + 1) until validTill) validTill = cooldownExpirySfm
-                }
             }
         }
 
         val validWithin = 60
+        //aapsLogger.info(LTag.WEAR, "getValidTill: sfm$sfm till$validTill d=${(validTill - sfm + validWithin) * 1000L}")
         return (validTill - sfm + validWithin) * 1000L
     }
 

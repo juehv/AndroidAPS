@@ -2,13 +2,12 @@ package app.aaps.pump.danars.comm
 
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationManager
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.pump.dana.DanaPump
 import app.aaps.pump.danars.encryption.BleEncryption
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 class DanaRSPacketNotifyAlarm @Inject constructor(
@@ -16,7 +15,7 @@ class DanaRSPacketNotifyAlarm @Inject constructor(
     private val rh: ResourceHelper,
     private val pumpSync: PumpSync,
     private val danaPump: DanaPump,
-    private val notificationManager: NotificationManager
+    private val uiInteraction: UiInteraction
 ) : DanaRSPacket() {
 
     init {
@@ -74,8 +73,8 @@ class DanaRSPacketNotifyAlarm @Inject constructor(
             aapsLogger.debug(LTag.PUMPCOMM, "Error detected: $errorString")
             return
         }
-        notificationManager.post(NotificationId.DANA_PUMP_ALARM, errorString)
-        runBlocking { pumpSync.insertAnnouncement(errorString, null, danaPump.pumpType(), danaPump.serialNumber) }
+        uiInteraction.addNotification(Notification.USER_MESSAGE, errorString, Notification.URGENT)
+        pumpSync.insertAnnouncement(errorString, null, danaPump.pumpType(), danaPump.serialNumber)
     }
 
     override val friendlyName: String = "NOTIFY__ALARM"

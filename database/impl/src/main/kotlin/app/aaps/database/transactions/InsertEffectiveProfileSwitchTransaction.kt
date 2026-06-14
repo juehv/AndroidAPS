@@ -4,7 +4,7 @@ import app.aaps.database.entities.EffectiveProfileSwitch
 
 class InsertEffectiveProfileSwitchTransaction(private val effectiveProfileSwitch: EffectiveProfileSwitch) : Transaction<InsertEffectiveProfileSwitchTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
 
         database.effectiveProfileSwitchDao.insertNewEntry(effectiveProfileSwitch)

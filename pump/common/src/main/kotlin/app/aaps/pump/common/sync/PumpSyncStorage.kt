@@ -3,14 +3,11 @@ package app.aaps.pump.common.sync
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.pump.DetailedBolusInfo
-import app.aaps.core.interfaces.pump.PumpInsulin
-import app.aaps.core.interfaces.pump.PumpRate
 import app.aaps.core.interfaces.pump.PumpSync
-import app.aaps.core.keys.StringNonKey
+import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.interfaces.Preferences
 import com.thoughtworks.xstream.XStream
 import com.thoughtworks.xstream.security.AnyTypePermission
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,20 +24,20 @@ class PumpSyncStorage @Inject constructor(
     var pumpSyncStorageBolus: MutableList<PumpDbEntryBolus> = mutableListOf()
     var pumpSyncStorageTBR: MutableList<PumpDbEntryTBR> = mutableListOf()
 
-    @Volatile private var storageInitialized: Boolean = false
+    private var storageInitialized: Boolean = false
+    private var xstream: XStream = XStream()
 
-    // XStream construction is heavy (Class.forName chain in setupSecurity) — defer it so it
-    // doesn't run on the main thread during Dagger eager-construct in MainApp.onCreate.
-    private val xstream: XStream by lazy {
-        XStream().apply { addPermission(AnyTypePermission.ANY) }
+    init {
+        initStorage()
     }
 
-    @Synchronized
     fun initStorage() {
         if (storageInitialized)
             return
 
-        preferences.getIfExists(StringNonKey.PumpCommonBolusStorage)?.let { jsonData ->
+        xstream.addPermission(AnyTypePermission.ANY)
+
+        preferences.getIfExists(StringKey.PumpCommonBolusStorage)?.let { jsonData ->
             if (jsonData.isNotBlank()) {
                 @Suppress("UNCHECKED_CAST")
                 pumpSyncStorageBolus = try {
@@ -54,7 +51,7 @@ class PumpSyncStorage @Inject constructor(
             }
         }
 
-        preferences.getIfExists(StringNonKey.PumpCommonTbrStorage)?.let { jsonData ->
+        preferences.getIfExists(StringKey.PumpCommonTbrStorage)?.let { jsonData ->
             if (jsonData.isNotBlank()) {
                 @Suppress("UNCHECKED_CAST")
                 pumpSyncStorageTBR = try {
@@ -71,44 +68,37 @@ class PumpSyncStorage @Inject constructor(
     }
 
     fun saveStorageBolus() {
-        if (!storageInitialized) initStorage()
         if (pumpSyncStorageBolus.isNotEmpty()) {
-            preferences.put(StringNonKey.PumpCommonBolusStorage, xstream.toXML(pumpSyncStorageBolus))
+            preferences.put(StringKey.PumpCommonBolusStorage, xstream.toXML(pumpSyncStorageBolus))
             aapsLogger.debug(LTag.PUMP, "Saving Pump Sync Storage: boluses=${pumpSyncStorageBolus.size}")
-        } else preferences.remove(StringNonKey.PumpCommonBolusStorage)
+        } else preferences.remove(StringKey.PumpCommonBolusStorage)
     }
 
     fun saveStorageTBR() {
-        if (!storageInitialized) initStorage()
         if (pumpSyncStorageTBR.isNotEmpty()) {
-            preferences.put(StringNonKey.PumpCommonTbrStorage, xstream.toXML(pumpSyncStorageTBR))
+            preferences.put(StringKey.PumpCommonTbrStorage, xstream.toXML(pumpSyncStorageTBR))
             aapsLogger.debug(LTag.PUMP, "Saving Pump Sync Storage: tbr=${pumpSyncStorageTBR.size}")
-        } else preferences.remove(StringNonKey.PumpCommonTbrStorage)
+        } else preferences.remove(StringKey.PumpCommonTbrStorage)
     }
 
     fun getBoluses(): MutableList<PumpDbEntryBolus> {
-        if (!storageInitialized) initStorage()
         return pumpSyncStorageBolus
     }
 
     fun getTBRs(): MutableList<PumpDbEntryTBR> {
-        if (!storageInitialized) initStorage()
         return pumpSyncStorageTBR
     }
 
     fun addBolusWithTempId(detailedBolusInfo: DetailedBolusInfo, writeToInternalHistory: Boolean, creator: PumpSyncEntriesCreator): Boolean {
-        if (!storageInitialized) initStorage()
         val temporaryId = creator.generateTempId(detailedBolusInfo.timestamp)
-        val result = runBlocking {
-            pumpSync.addBolusWithTempId(
-                detailedBolusInfo.timestamp,
-                amount = PumpInsulin(detailedBolusInfo.insulin),
-                temporaryId,
-                detailedBolusInfo.bolusType,
-                creator.model(),
-                creator.serialNumber()
-            )
-        }
+        val result = pumpSync.addBolusWithTempId(
+            detailedBolusInfo.timestamp,
+            detailedBolusInfo.insulin,
+            temporaryId,
+            detailedBolusInfo.bolusType,
+            creator.model(),
+            creator.serialNumber()
+        )
 
         aapsLogger.debug(
             LTag.PUMP, "addBolusWithTempId [date=${detailedBolusInfo.timestamp}, temporaryId=$temporaryId, " +
@@ -138,15 +128,13 @@ class PumpSyncStorage @Inject constructor(
     }
 
     fun addCarbs(carbsDto: PumpDbEntryCarbs) {
-        val result = runBlocking {
-            pumpSync.syncCarbsWithTimestamp(
-                carbsDto.date,
-                carbsDto.carbs,
-                null,
-                carbsDto.pumpType,
-                carbsDto.serialNumber
-            )
-        }
+        val result = pumpSync.syncCarbsWithTimestamp(
+            carbsDto.date,
+            carbsDto.carbs,
+            null,
+            carbsDto.pumpType,
+            carbsDto.serialNumber
+        )
 
         aapsLogger.debug(
             LTag.PUMP, "syncCarbsWithTimestamp [date=${carbsDto.date}, " +
@@ -155,22 +143,19 @@ class PumpSyncStorage @Inject constructor(
     }
 
     fun addTemporaryBasalRateWithTempId(temporaryBasal: PumpDbEntryTBR, writeToInternalHistory: Boolean, creator: PumpSyncEntriesCreator): Boolean {
-        if (!storageInitialized) initStorage()
         val timeNow: Long = System.currentTimeMillis()
         val temporaryId = creator.generateTempId(timeNow)
 
-        val response = runBlocking {
-            pumpSync.addTemporaryBasalWithTempId(
-                timeNow,
-                PumpRate(temporaryBasal.rate),
-                (temporaryBasal.durationInSeconds * 1000L),
-                temporaryBasal.isAbsolute,
-                temporaryId,
-                temporaryBasal.tbrType,
-                creator.model(),
-                creator.serialNumber()
-            )
-        }
+        val response = pumpSync.addTemporaryBasalWithTempId(
+            timeNow,
+            temporaryBasal.rate,
+            (temporaryBasal.durationInSeconds * 1000L),
+            temporaryBasal.isAbsolute,
+            temporaryId,
+            temporaryBasal.tbrType,
+            creator.model(),
+            creator.serialNumber()
+        )
 
         if (response && writeToInternalHistory) {
             val dbEntry = PumpDbEntryTBR(
@@ -192,7 +177,6 @@ class PumpSyncStorage @Inject constructor(
     }
 
     fun removeBolusWithTemporaryId(temporaryId: Long) {
-        if (!storageInitialized) initStorage()
         var dbEntry: PumpDbEntryBolus? = null
 
         for (pumpDbEntry in pumpSyncStorageBolus) {
@@ -209,7 +193,6 @@ class PumpSyncStorage @Inject constructor(
     }
 
     fun removeTemporaryBasalWithTemporaryId(temporaryId: Long) {
-        if (!storageInitialized) initStorage()
         var dbEntry: PumpDbEntryTBR? = null
 
         for (pumpDbEntry in pumpSyncStorageTBR) {

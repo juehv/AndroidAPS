@@ -9,14 +9,14 @@ data class BS(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     var amount: Double,
     var type: Type,
     var notes: String? = null,
     var isBasalInsulin: Boolean = false,
-    var iCfg: ICfg
-) : HasIDs, TimeStamped {
+    var icfg: ICfg? = null
+) : HasIDs {
 
     fun contentEqualsTo(other: BS): Boolean =
         isValid == other.isValid &&
@@ -25,8 +25,7 @@ data class BS(
             amount == other.amount &&
             type == other.type &&
             notes == other.notes &&
-            isBasalInsulin == other.isBasalInsulin &&
-            iCfg == other.iCfg
+            isBasalInsulin == other.isBasalInsulin
 
     fun onlyNsIdAdded(previous: BS): Boolean =
         previous.id != id &&

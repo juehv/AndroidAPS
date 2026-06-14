@@ -12,7 +12,7 @@ import java.util.TimeZone
 /** Heart rate values measured by a user smart watch or the like. */
 @Entity(
     tableName = TABLE_HEART_RATE,
-    indices = [Index("timestamp")]
+    indices = [Index("id"), Index("timestamp")]
 )
 data class HeartRate(
     @PrimaryKey(autoGenerate = true)

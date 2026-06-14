@@ -11,8 +11,7 @@ import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.plugins.source.keys.GlunovoLongKey
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.runBlocking
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -35,11 +34,9 @@ class GlunovoPluginTest : TestBaseWithProfile() {
     fun setup() {
         whenever(context.contentResolver).thenReturn(contentResolver)
         whenever(contentResolver.query(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(cursor)
-        runTest {
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
-        }
+        whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
-        glunovoPlugin = GlunovoPlugin(rh, aapsLogger, preferences, config, context, persistenceLayer, dateUtil, fabricPrivacy)
+        glunovoPlugin = GlunovoPlugin(rh, aapsLogger, preferences, context, persistenceLayer, dateUtil, fabricPrivacy)
 
         // Default cursor to be empty
         whenever(cursor.isAfterLast).thenReturn(true)
@@ -91,9 +88,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
             value = 9.0,
             glucoseUnit = GlucoseUnit.MMOL
         )
-        runTest {
-            verify(persistenceLayer).insertCgmSourceData(Sources.Glunovo, listOf(expectedGv), listOf(expectedCalibration), null)
-        }
+        verify(persistenceLayer).insertCgmSourceData(Sources.Glunovo, listOf(expectedGv), listOf(expectedCalibration), null)
         verify(preferences).put(GlunovoLongKey.LastProcessedTimestamp, now - 500)
     }
 
@@ -116,9 +111,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.handleNewData()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -139,9 +132,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.handleNewData()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -163,9 +154,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.handleNewData()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -187,9 +176,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.handleNewData()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -203,9 +190,7 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.handleNewData()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
     }
 
     @Test
@@ -218,14 +203,12 @@ class GlunovoPluginTest : TestBaseWithProfile() {
         glunovoPlugin.refreshLoop.run()
 
         // THEN
-        runTest {
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
-        }
+        verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), anyOrNull())
         verify(fabricPrivacy, never()).logException(any())
     }
 
     @Test
-    fun startStopTest() = runBlocking {
+    fun startStopTest() {
         Assertions.assertNull(glunovoPlugin.handler)
         glunovoPlugin.onStart()
         Assertions.assertNotNull(glunovoPlugin.handler)

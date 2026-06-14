@@ -8,14 +8,15 @@ import app.aaps.core.data.ue.ValueWithUnit
 import app.aaps.core.interfaces.alerts.LocalAlertUtils
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.di.ApplicationScope
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationManager
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
+import app.aaps.core.interfaces.rx.events.EventNewNotification
 import app.aaps.core.interfaces.smsCommunicator.SmsCommunicator
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.keys.BooleanKey
@@ -24,8 +25,8 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.extensions.asAnnouncement
 import app.aaps.core.ui.R
 import app.aaps.implementation.alerts.keys.LocalAlertLongKey
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import io.reactivex.rxjava3.disposables.CompositeDisposable
+import io.reactivex.rxjava3.kotlin.plusAssign
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.min
@@ -37,20 +38,21 @@ import kotlin.math.min
 class LocalAlertUtilsImpl @Inject constructor(
     private val aapsLogger: AAPSLogger,
     private val preferences: Preferences,
+    private val rxBus: RxBus,
     private val rh: ResourceHelper,
     private val activePlugin: ActivePlugin,
     private val profileFunction: ProfileFunction,
     private val smsCommunicator: SmsCommunicator,
     private val config: Config,
     private val persistenceLayer: PersistenceLayer,
-    private val dateUtil: DateUtil,
-    private val notificationManager: NotificationManager,
-    @ApplicationScope private val appScope: CoroutineScope
+    private val dateUtil: DateUtil
 ) : LocalAlertUtils {
 
     init {
         preferences.registerPreferences(LocalAlertLongKey::class.java)
     }
+
+    private val disposable = CompositeDisposable()
 
     private fun missedReadingsThreshold(): Long {
         return T.mins(preferences.get(IntKey.AlertsStaleDataThreshold).toLong()).msecs()
@@ -67,23 +69,21 @@ class LocalAlertUtilsImpl @Inject constructor(
             if (preferences.get(BooleanKey.AlertPumpUnreachable)) {
                 aapsLogger.debug(LTag.CORE, "Generating pump unreachable alarm. lastConnection: " + dateUtil.dateAndTimeString(lastConnection) + " isStatusOutdated: true")
                 preferences.put(LocalAlertLongKey.NextPumpDisconnectedAlarm, dateUtil.now() + pumpUnreachableThreshold())
-                notificationManager.post(NotificationId.PUMP_UNREACHABLE, R.string.pump_unreachable, soundRes = R.raw.alarm)
+                rxBus.send(EventNewNotification(Notification(Notification.PUMP_UNREACHABLE, rh.gs(R.string.pump_unreachable), Notification.URGENT).also { it.soundId = R.raw.alarm }))
                 if (preferences.get(BooleanKey.NsClientCreateAnnouncementsFromErrors) && config.APS)
-                    appScope.launch {
-                        persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(
-                            therapyEvent = TE.asAnnouncement(rh.gs(R.string.pump_unreachable)),
-                            timestamp = dateUtil.now(),
-                            action = Action.CAREPORTAL,
-                            source = Sources.Aaps,
-                            note = rh.gs(R.string.pump_unreachable),
-                            listValues = listOf(ValueWithUnit.TEType(TE.Type.ANNOUNCEMENT))
-                        )
-                    }
+                    disposable += persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(
+                        therapyEvent = TE.asAnnouncement(rh.gs(R.string.pump_unreachable)),
+                        timestamp = dateUtil.now(),
+                        action = Action.CAREPORTAL,
+                        source = Sources.Aaps,
+                        note = rh.gs(R.string.pump_unreachable),
+                        listValues = listOf(ValueWithUnit.TEType(TE.Type.ANNOUNCEMENT))
+                    ).subscribe()
             }
             if (preferences.get(BooleanKey.SmsReportPumpUnreachable))
                 smsCommunicator.sendNotificationToAllNumbers(rh.gs(R.string.pump_unreachable))
         }
-        if (!isStatusOutdated && !alarmTimeoutExpired) notificationManager.dismiss(NotificationId.PUMP_UNREACHABLE)
+        if (!isStatusOutdated && !alarmTimeoutExpired) rxBus.send(EventDismissNotification(Notification.PUMP_UNREACHABLE))
     }
 
     private fun isAlarmTimeoutExpired(lastConnection: Long, unreachableThreshold: Long): Boolean {
@@ -115,11 +115,11 @@ class LocalAlertUtilsImpl @Inject constructor(
         preferences.put(LocalAlertLongKey.NextPumpDisconnectedAlarm, nextPumpDisconnectedAlarm)
     }
 
-    override suspend fun reportPumpStatusRead() {
+    override fun reportPumpStatusRead() {
         val pump = activePlugin.activePump
         val profile = profileFunction.getProfile()
         if (profile != null) {
-            val lastConnection = pump.lastDataTime.value
+            val lastConnection = pump.lastDataTime
             val earliestAlarmTime = lastConnection + pumpUnreachableThreshold()
             if (preferences.get(LocalAlertLongKey.NextPumpDisconnectedAlarm) < earliestAlarmTime) {
                 preferences.put(LocalAlertLongKey.NextPumpDisconnectedAlarm, earliestAlarmTime)
@@ -127,28 +127,28 @@ class LocalAlertUtilsImpl @Inject constructor(
         }
     }
 
-    override suspend fun checkStaleBGAlert() {
+    override fun checkStaleBGAlert() {
         val bgReading = persistenceLayer.getLastGlucoseValue() ?: return
         if (preferences.get(BooleanKey.AlertMissedBgReading)
             && bgReading.timestamp + missedReadingsThreshold() < dateUtil.now()
             && preferences.get(LocalAlertLongKey.NextMissedReadingsAlarm) < dateUtil.now()
         ) {
+            val n = Notification(Notification.BG_READINGS_MISSED, rh.gs(R.string.missed_bg_readings), Notification.URGENT)
+            n.soundId = R.raw.alarm
             preferences.put(LocalAlertLongKey.NextMissedReadingsAlarm, dateUtil.now() + missedReadingsThreshold())
-            notificationManager.post(NotificationId.BG_READINGS_MISSED, R.string.missed_bg_readings, soundRes = R.raw.alarm)
+            rxBus.send(EventNewNotification(n))
             if (preferences.get(BooleanKey.NsClientCreateAnnouncementsFromErrors) && config.APS) {
-                appScope.launch {
-                    persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(
-                        therapyEvent = TE.asAnnouncement(rh.gs(R.string.missed_bg_readings)),
-                        timestamp = dateUtil.now(),
-                        action = Action.CAREPORTAL,
-                        source = Sources.Aaps,
-                        note = rh.gs(R.string.missed_bg_readings),
-                        listValues = listOf(ValueWithUnit.TEType(TE.Type.ANNOUNCEMENT))
-                    )
-                }
+                disposable += persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(
+                    therapyEvent = TE.asAnnouncement(n.text),
+                    timestamp = dateUtil.now(),
+                    action = Action.CAREPORTAL,
+                    source = Sources.Aaps,
+                    note = rh.gs(R.string.missed_bg_readings),
+                    listValues = listOf(ValueWithUnit.TEType(TE.Type.ANNOUNCEMENT))
+                ).subscribe()
             }
         } else if (dateUtil.isOlderThan(bgReading.timestamp, 5).not()) {
-            notificationManager.dismiss(NotificationId.BG_READINGS_MISSED)
+            rxBus.send(EventDismissNotification(Notification.BG_READINGS_MISSED))
         }
     }
 }

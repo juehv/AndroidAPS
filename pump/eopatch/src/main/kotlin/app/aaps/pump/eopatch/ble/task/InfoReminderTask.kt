@@ -14,12 +14,12 @@ import javax.inject.Singleton
 @Singleton
 class InfoReminderTask @Inject constructor() : TaskBase(TaskFunc.INFO_REMINDER) {
 
-    @Inject lateinit var infoReminderSet: InfoReminderSet
+    private val INFO_REMINDER_SET: InfoReminderSet = InfoReminderSet()
 
     /* alert delay 사용안함 */
     fun set(infoReminder: Boolean): Single<PatchBooleanResponse> {
         return isReady()
-            .concatMapSingle<PatchBooleanResponse>(Function { infoReminderSet.set(infoReminder) })
+            .concatMapSingle<PatchBooleanResponse>(Function { INFO_REMINDER_SET.set(infoReminder) })
             .doOnNext(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
             .firstOrError()
             .doOnError(Consumer { e: Throwable -> aapsLogger.error(LTag.PUMPCOMM, e.message ?: "InfoReminderTask error") })

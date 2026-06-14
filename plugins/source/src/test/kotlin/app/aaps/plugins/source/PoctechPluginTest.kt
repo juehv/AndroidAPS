@@ -1,6 +1,5 @@
 package app.aaps.plugins.source
 
-import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.shared.tests.TestBase
@@ -15,15 +14,13 @@ class PoctechPluginTest : TestBase() {
 
     @Mock lateinit var rh: ResourceHelper
     @Mock lateinit var preferences: Preferences
-    @Mock lateinit var config: Config
 
     @BeforeEach
     fun setup() {
-        poctechPlugin = PoctechPlugin(rh, aapsLogger, preferences, config)
+        poctechPlugin = PoctechPlugin(rh, aapsLogger, preferences)
     }
 
-    @Test
-    fun `plugin is created`() {
-        assertThat(poctechPlugin).isNotNull()
+    @Test fun advancedFilteringSupported() {
+        assertThat(poctechPlugin.advancedFilteringSupported()).isFalse()
     }
 }

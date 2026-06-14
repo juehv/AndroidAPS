@@ -65,7 +65,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedMillis)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `toISOString works and matches old behavior`() {
         val millis = 1698311223344L
@@ -76,7 +75,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedString)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `toISOAsUTC works and matches old behavior`() {
         val millis = 1698311223344L
@@ -87,7 +85,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedString)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `toISONoZone works and matches old behavior`() {
         val millis = 1698311223344L // 09:07:03.344 UTC
@@ -98,11 +95,10 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedString)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `timeStampToUtcDateMillis works correctly now`() {
         val timestamp = 1698311223344L // 2023-10-26 09:07:03.344Z
-        val expectedMillis = 1698278400000L // 2023-10-26 00:00:00.000Z
+       val expectedMillis = 1698278400000L // 2023-10-26 00:00:00.000Z
         val newResult = dateUtilImpl.timeStampToUtcDateMillis(timestamp)
         val oldResult = dateUtilOldImpl.timeStampToUtcDateMillis(timestamp)
 
@@ -111,7 +107,6 @@ class DateUtilImplTest {
 //TODO: the original timeStampToUtcDateMillis couldn't parse milliseconds.
         assertThat(newResult).isNotEqualTo(oldResult)
     }
-
     @Test
     fun `minutesOfTheDayToMilliseconds correctly truncates to the minute`() {
         // ARRANGE
@@ -136,7 +131,6 @@ class DateUtilImplTest {
         assertThat(newTime).isEqualTo("01:01 AM") // Based on our fixed clock's timezone
         assertThat(newTime).isEqualTo(oldTime)
     }
-
     @Test
     fun `secondsOfTheDayToMilliseconds works correctly now (without truncating seconds)`() {
         // ARRANGE: Input representing 1 hour, 1 minute, and 45 seconds.
@@ -169,7 +163,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `timeString works for 12-hour format and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -183,7 +176,6 @@ class DateUtilImplTest {
             assertThat(newResult).isEqualTo(oldResult)
         }
     }
-
     @Test
     fun `timeString works for 24-hour format and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -197,7 +189,6 @@ class DateUtilImplTest {
             assertThat(newResult).isEqualTo(oldResult)
         }
     }
-
     @Test
     fun `timeStringWithSeconds works and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -215,7 +206,6 @@ class DateUtilImplTest {
             assertThat(dateUtilOldImpl.timeStringWithSeconds(millis)).isEqualTo(expected24Hour)
         }
     }
-
     @Test
     fun `dateStringShort works and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -237,7 +227,6 @@ class DateUtilImplTest {
             assertThat(newResult24).isEqualTo(oldResult24)
         }
     }
-
     @Test
     fun `dateAndTimeString works and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -257,7 +246,6 @@ class DateUtilImplTest {
             assertThat(oldResult).isEqualTo(expected)
         }
     }
-
     @Test
     fun `dateAndTimeAndSecondsString works and matches old behavior`() {
         // ARRANGE
@@ -276,7 +264,6 @@ class DateUtilImplTest {
         // The old implementation also padded the hour, so they should match.
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `dateAndTimeRangeString works and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -298,7 +285,6 @@ class DateUtilImplTest {
             assertThat(oldResult).isEqualTo(expected)
         }
     }
-
     @Test
     fun `dateAndTimeStringNullable works and matches old behavior`() {
         mockStatic(DateFormat::class.java).use { mockedStatic ->
@@ -319,7 +305,6 @@ class DateUtilImplTest {
             assertThat(dateUtilOldImpl.dateAndTimeStringNullable(0L)).isNull()
         }
     }
-
     @Test
     fun `timeRangeString works and matches old behavior`() {
         val startTime = 1698436800000L // 16:00 EDT -> "04:00 PM"
@@ -335,7 +320,6 @@ class DateUtilImplTest {
             assertThat(newResult).isEqualTo(oldResult)
         }
     }
-
     @Test
     fun `formatHHMM works and matches old behavior`() {
         // ARRANGE
@@ -356,19 +340,20 @@ class DateUtilImplTest {
     @Test
     fun `dateStringRelative identifies today and yesterday and matches old behavior`() {
         val rh = FakeResourceHelper()
-        // Use a fixed clock anchored at noon so "one hour ago" stays in the same day
-        // regardless of when the test runs.
-        val noonToday = ZonedDateTime.of(2023, 10, 27, 12, 0, 0, 0, fixedZone).toInstant()
-        val clockAtNoon = Clock.fixed(noonToday, fixedZone)
-        val util = DateUtilImpl(mockContext, clockAtNoon)
-        val nowMillis = noonToday.toEpochMilli()
-        val oneHourAgo = nowMillis - TimeUnit.HOURS.toMillis(1)
-        val twentyFiveHoursAgo = nowMillis - TimeUnit.HOURS.toMillis(25)
+        // This test is kept as a simple regression check. It's not fully deterministic.
+        val oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000)
+        val twentyFiveHoursAgo = System.currentTimeMillis() - (25 * 60 * 60 * 1000)
 
-        assertThat(util.dateStringRelative(oneHourAgo, rh)).startsWith("Today - ")
-        assertThat(util.dateStringRelative(twentyFiveHoursAgo, rh)).startsWith("Yesterday - ")
+        val newTodayResult = dateUtilImpl.dateStringRelative(oneHourAgo, rh)
+        val oldTodayResult = dateUtilOldImpl.dateStringRelative(oneHourAgo, rh)
+        assertThat(newTodayResult).isEqualTo("Today")
+        assertThat(newTodayResult).isEqualTo(oldTodayResult)
+
+        val newYesterdayResult = dateUtilImpl.dateStringRelative(twentyFiveHoursAgo, rh)
+        val oldYesterdayResult = dateUtilOldImpl.dateStringRelative(twentyFiveHoursAgo, rh)
+        assertThat(newYesterdayResult).isEqualTo("Yesterday")
+        assertThat(newYesterdayResult).isEqualTo(oldYesterdayResult)
     }
-
     @Test
     fun `dateStringRelative is deterministic with fixed clock`() {
         // ARRANGE
@@ -382,12 +367,12 @@ class DateUtilImplTest {
         // The clock is now fixed to a time later on the same day.
         val clockForTodayTest = Clock.fixed(startOfDay.plus(12, java.time.temporal.ChronoUnit.HOURS), fixedZone)
         val utilForToday = DateUtilImpl(mockContext, clockForTodayTest)
-        assertThat(utilForToday.dateStringRelative(todayTimestamp, rh)).isEqualTo("Today - 10/27/23")
+        assertThat(utilForToday.dateStringRelative(todayTimestamp, rh)).isEqualTo("Today")
 
         // --- Test for "Yesterday" ---
         // A timestamp from the previous day.
         val yesterdayTimestamp = startOfDay.minus(2, java.time.temporal.ChronoUnit.HOURS).toEpochMilli()
-        assertThat(utilForToday.dateStringRelative(yesterdayTimestamp, rh)).isEqualTo("Yesterday - 10/26/23")
+        assertThat(utilForToday.dateStringRelative(yesterdayTimestamp, rh)).isEqualTo("Yesterday")
 
         // --- Test for "Later today" ---
         val laterTodayTimestamp = startOfDay.plus(14, java.time.temporal.ChronoUnit.HOURS).toEpochMilli()
@@ -397,7 +382,6 @@ class DateUtilImplTest {
         val tomorrowTimestamp = startOfDay.plus(26, java.time.temporal.ChronoUnit.HOURS).toEpochMilli()
         assertThat(utilForToday.dateStringRelative(tomorrowTimestamp, rh)).isEqualTo("Tomorrow")
     }
-
     @Test
     fun `minAgo formats minutes ago and matches old behavior`() {
         val rh = FakeResourceHelper()
@@ -411,7 +395,6 @@ class DateUtilImplTest {
         assertThat(newResult).startsWith("5 min ago") // Using startsWith to avoid issues with test execution time
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `minAgo is deterministic with fixed clock`() {
         // ARRANGE
@@ -425,7 +408,6 @@ class DateUtilImplTest {
         // ASSERT
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `minOrSecAgo formats seconds and minutes correctly and matches old behavior`() {
         val rh = FakeResourceHelper()
@@ -443,7 +425,6 @@ class DateUtilImplTest {
         assertThat(newMinResult).contains("3 min ago")
         assertThat(newMinResult).isEqualTo(oldMinResult)
     }
-
     @Test
     fun `minOrSecAgo is deterministic with fixed clock`() {
         // ARRANGE
@@ -459,7 +440,6 @@ class DateUtilImplTest {
         val expectedMinutes = "3 min ago"
         assertThat(dateUtilImplDeter.minOrSecAgo(rh, threeMinutesAgo)).isEqualTo(expectedMinutes)
     }
-
     @Test
     fun `minAgoShort works and matches old behavior`() {
         // ARRANGE
@@ -475,7 +455,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `minAgoShort is deterministic with fixed clock`() {
         // ARRANGE
@@ -488,7 +467,6 @@ class DateUtilImplTest {
         // ACT & ASSERT for future
         assertThat(dateUtilImplDeter.minAgoShort(fiveMinutesHence)).isEqualTo("(+5)")
     }
-
     @Test
     fun `minAgoLong works and matches old behavior`() {
         // ARRANGE
@@ -505,7 +483,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `minAgoLong is deterministic with fixed clock`() {
         // ARRANGE
@@ -519,7 +496,6 @@ class DateUtilImplTest {
         // ASSERT
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `hourAgo works and matches old behavior`() {
         // ARRANGE
@@ -536,7 +512,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `hourAgo is deterministic with fixed clock`() {
         // ARRANGE
@@ -550,7 +525,6 @@ class DateUtilImplTest {
         // ASSERT
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `dayAgo works and matches old behavior`() {
         // ARRANGE
@@ -567,7 +541,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `dayAgo is deterministic with fixed clock`() {
         // ARRANGE
@@ -582,7 +555,6 @@ class DateUtilImplTest {
         // ASSERT
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `sinceString produces correct timeFrameString and matches old behavior`() {
         // ARRANGE
@@ -601,7 +573,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedSinceString)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `sinceString is deterministic with fixed clock`() {
         val rh = FakeResourceHelper()
@@ -611,7 +582,6 @@ class DateUtilImplTest {
 
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `untilString produces correct timeFrameString and matches old behavior`() {
         // ARRANGE
@@ -630,7 +600,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedUntilString)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `untilString is deterministic with fixed clock`() {
         val rh = FakeResourceHelper()
@@ -640,7 +609,6 @@ class DateUtilImplTest {
         val newResult = dateUtilImplDeter.untilString(futureTimestamp, rh)
         assertThat(newResult).isEqualTo(expected)
     }
-
     @Test
     fun `age works for duration over a day and matches old behavior`() {
         val millis = 95400 * 1000L // 1 day, 2 hours, 30 minutes
@@ -655,7 +623,6 @@ class DateUtilImplTest {
         // expected                           : 1 d 2 h
         // but was missing trailing whitespace: ␣
     }
-
     @Test
     fun `age works for duration less than a day and matches old behavior`() {
         val millis = 12600 * 1000L // 3 hours, 30 minutes
@@ -667,7 +634,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `niceTimeScalar works works correctly now`() {
         // ARRANGE
@@ -723,7 +689,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `minuteString works and matches old behavior`() {
         // ARRANGE
@@ -738,7 +703,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `hourString works and matches old behavior`() {
         // ARRANGE
@@ -760,7 +724,6 @@ class DateUtilImplTest {
             assertThat(dateUtilOldImpl.hourString(millis)).isEqualTo(expected24Hour)
         }
     }
-
     @Test
     fun `amPm works and matches old behavior`() {
         // ARRANGE
@@ -775,7 +738,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `dayNameString works and matches old behavior`() {
         // ARRANGE
@@ -793,7 +755,6 @@ class DateUtilImplTest {
         assertThat(newFull).isEqualTo("Friday")
         assertThat(oldFull).isEqualTo("Friday")
     }
-
     @Test
     fun `dayString works and matches old behavior`() {
         // ARRANGE
@@ -808,7 +769,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(oldResult).isEqualTo(expected)
     }
-
     @Test
     fun `monthString works and matches old behavior`() {
         // ARRANGE
@@ -826,7 +786,6 @@ class DateUtilImplTest {
         assertThat(newFull).isEqualTo("October")
         assertThat(oldFull).isEqualTo("October")
     }
-
     @Test
     fun `weekString works and matches old behavior`() {
         // ARRANGE
@@ -854,7 +813,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedSeconds)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `beginOfDay works and matches old behavior`() {
         val millis = 1698455400000L // 2023-10-27 10:30 PM EDT
@@ -865,7 +823,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedMillis)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `nowWithoutMilliseconds is deterministic with fixed clock`() {
         // ARRANGE
@@ -873,11 +830,12 @@ class DateUtilImplTest {
         val expected = fixedInstant.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toEpochMilli()
 
         // ACT
-        val newResult = dateUtilImplDeter.nowWithoutMilliseconds()
+        val newResult
+            = dateUtilImplDeter.nowWithoutMilliseconds()
 
         // ASSERT
         assertThat(newResult).isEqualTo(expected)
-        assertThat(newResult % 1000).isEqualTo(0L)
+        assertThat(newResult %1000).isEqualTo(0L)
     }
 
     @Test
@@ -893,8 +851,7 @@ class DateUtilImplTest {
         val tenMinutesAgo = fixedInstant.minus(10, java.time.temporal.ChronoUnit.MINUTES).toEpochMilli()
         Truth.assertThat(dateUtilImplDeter.isOlderThan(tenMinutesAgo, tenMinutes)).isFalse()
     }
-
-    @Test
+        @Test
     fun `nowWithoutMilliseconds works and matches old behavior`() {
         // We can't test the exact value, but we can test the property: it should be divisible by 1000
         val newResult = dateUtilImpl.nowWithoutMilliseconds()
@@ -903,7 +860,6 @@ class DateUtilImplTest {
         assertThat(newResult % 1000).isEqualTo(0L)
         assertThat(oldResult % 1000).isEqualTo(0L)
     }
-
     @Test
     fun `isOlderThan works and matches old behavior`() {
         val now = dateUtilImpl.now() // Use a fixed "now" for the test
@@ -918,14 +874,12 @@ class DateUtilImplTest {
         assertThat(dateUtilImpl.isOlderThan(timestampFrom5MinAgo, 10)).isFalse()
         assertThat(dateUtilOldImpl.isOlderThan(timestampFrom5MinAgo, 10)).isFalse()
     }
-
     @Test
     fun `isAfterNoon works and matches old behavior`() {
         val newResult = dateUtilImpl.isAfterNoon()
         val oldResult = dateUtilOldImpl.isAfterNoon()
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `isAfterNoon is deterministic with fixed clock`() {
         // ARRANGE: An instant that is in the afternoon (16:00 UTC)
@@ -959,36 +913,32 @@ class DateUtilImplTest {
         // ASSERT that 10 AM is not after noon
         assertThat(morningDateUtilb.isAfterNoon()).isFalse()
     }
-
     @Test
     fun `isSameDayGroup works and matches old behavior`() {
-        // ARRANGE — both implementations use System.currentTimeMillis() for the "now" check,
-        // so use timestamps far in the past (well before now) to avoid midnight flakiness.
-        // Pick a known midday point and build offsets from it.
-        val midday = 1698415200000L // 2023-10-27T12:00:00 EDT (16:00:00 UTC)
+        // ARRANGE
+        val now = dateUtilImpl.now() // Use a fixed "now" for the test
         val oneHour = 3600 * 1000L
 
         // --- Case 1: TRUE ---
-        // Both timestamps on the same day, both before "now" (in the past), so "now" is NOT between them.
-        val ts1Case1 = midday - (2 * oneHour) // 10:00 AM
-        val ts2Case1 = midday - (1 * oneHour) // 11:00 AM
-        assertThat(dateUtilImpl.isSameDayGroup(ts1Case1, ts2Case1)).isTrue()
-        assertThat(dateUtilOldImpl.isSameDayGroup(ts1Case1, ts2Case1)).isTrue()
+        // Both timestamps on the same day, and "now" is NOT between them.
+        val ts1_case1 = now - (2 * oneHour) // 2 hours ago
+        val ts2_case1 = now - (1 * oneHour) // 1 hour ago
+        assertThat(dateUtilImpl.isSameDayGroup(ts1_case1, ts2_case1)).isTrue()
+        assertThat(dateUtilOldImpl.isSameDayGroup(ts1_case1, ts2_case1)).isTrue()
 
-        // --- Case 2: FALSE (due to date check) ---
+        // --- Case 2: FALSE (due to "now" check) ---
+        // Both timestamps on the same day, but "now" IS between them.
+        val ts1_case2 = now - oneHour // 1 hour ago
+        val ts2_case2 = now + oneHour // 1 hour in the future
+        assertThat(dateUtilImpl.isSameDayGroup(ts1_case2, ts2_case2)).isFalse()
+        assertThat(dateUtilOldImpl.isSameDayGroup(ts1_case2, ts2_case2)).isFalse()
+
+        // --- Case 3: FALSE (due to date check) ---
         // Timestamps on different days.
-        val ts1Case2 = midday - (36 * oneHour) // Previous day
-        val ts2Case2 = midday - (12 * oneHour) // Same day as midday
-        assertThat(dateUtilImpl.isSameDayGroup(ts1Case2, ts2Case2)).isFalse()
-        assertThat(dateUtilOldImpl.isSameDayGroup(ts1Case2, ts2Case2)).isFalse()
-
-        // --- Case 3: FALSE (due to "now" check) ---
-        // Both timestamps on the same day, but deterministic "now" IS between them.
-        // fixedInstant = 2023-10-27T16:00:00Z = noon EDT
-        val fixedNow = fixedInstant.toEpochMilli()
-        val ts1Case3 = fixedNow - oneHour // 1 hour before fixed clock
-        val ts2Case3 = fixedNow + oneHour // 1 hour after fixed clock
-        assertThat(dateUtilImplDeter.isSameDayGroup(ts1Case3, ts2Case3)).isFalse()
+        val ts1_case3 = now - (36 * oneHour) // Yesterday
+        val ts2_case3 = now - (12 * oneHour) // Today
+        assertThat(dateUtilImpl.isSameDayGroup(ts1_case3, ts2_case3)).isFalse()
+        assertThat(dateUtilOldImpl.isSameDayGroup(ts1_case3, ts2_case3)).isFalse()
     }
 
     @Test
@@ -1024,15 +974,14 @@ class DateUtilImplTest {
             assertThat(oldResult).isEqualTo(newResult)
         }
     }
-
     @Test
-    fun `timeFrameString formats durations correctly and matches old behavior`() {
+    fun`timeFrameString formats durations correctly and matches old behavior`() {
         // ARRANGE
         val rh = FakeResourceHelper()
 
         // --- Case 1: Hours and Minutes ---
         // 2 hours and 30 minutes
-        val duration1 = (2 * 3600 * 1000L) + (30 * 60 * 1000L)
+        val duration1 = (2 *3600 * 1000L) + (30 * 60 * 1000L)
         val expected1 = "(2h 30')"
         assertThat(dateUtilImpl.timeFrameString(duration1, rh)).isEqualTo(expected1)
         assertThat(dateUtilOldImpl.timeFrameString(duration1, rh)).isEqualTo(expected1)
@@ -1053,7 +1002,7 @@ class DateUtilImplTest {
     //endregion
 
     //region Timezone Logic
-    @Test
+                         @Test
     fun `getTimeZoneOffsetMs works and matches old non-DST-aware behavior`() {
         // ARRANGE
         // For America/New_York, the standard offset is always UTC-5 (EST).
@@ -1066,7 +1015,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedStandardOffsetMillis)
         assertThat(oldResult).isEqualTo(expectedStandardOffsetMillis)
     }
-
     @Test
     fun `getTimeZoneOffsetMs variants behave as expected`() {
         // ARRANGE
@@ -1107,7 +1055,6 @@ class DateUtilImplTest {
         // This also proves the DST-aware function is different from the others in summer.
         assertThat(newResultSummerDst).isNotEqualTo(newResultSummer)
     }
-
     @Test
     fun `getTimeZoneOffsetMinutes reports correct offset for standard and daylight time and matches old behavior`() {
         // A time in the winter (Standard Time, EST, UTC-5)
@@ -1126,7 +1073,6 @@ class DateUtilImplTest {
         assertThat(newWinterResult).isEqualTo(oldWinterResult)
         assertThat(newSummerResult).isEqualTo(oldSummerResult)
     }
-
     @Test
     fun `timeZoneByOffset finds a timezone with the correct offset including non-hourly offsets`() {
         // ARRANGE: A list of offsets to test (in milliseconds)
@@ -1169,7 +1115,6 @@ class DateUtilImplTest {
         assertThat(dateUtilImpl.timeZoneByOffset(0L)).isEqualTo("UTC")
         assertThat(dateUtilOldImpl.timeZoneByOffset(0L).id).isEqualTo("UTC")
     }
-
     @Test
     fun `getTimestampWithCurrentTimeOfDay combines date and time correctly (new implementation)`() {
         // This test is tricky because it depends on `now()`.
@@ -1183,7 +1128,6 @@ class DateUtilImplTest {
 
         assertThat(resultDateString).isEqualTo(originalDateString)
     }
-
     @Test
     fun `mergeUtcDateToTimestamp works and matches old behavior`() {
         // The original timestamp, which contains the TIME we want to keep (16:00 EDT)
@@ -1200,7 +1144,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedResult)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `mergeHourMinuteToTimestamp works and matches old behavior`() {
         // ARRANGE: A base timestamp and the hour/minute we want to set
@@ -1222,7 +1165,7 @@ class DateUtilImplTest {
     //endregion
 
     //region DST Transition Scenarios
-    @Test
+                         @Test
     fun `beginOfDay works correctly on DST spring forward day and matches old behavior`() {
         // In New York, 2023, DST starts on March 12.
         val millisOnSpringForwardDay = 1678604700000L // 2023-03-12 03:05:00 EDT
@@ -1234,7 +1177,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedStartOfDay)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `isSameDay works correctly across the DST fall back transition and matches old behavior`() {
         // In New York, 2023, DST ends on Nov 5.
@@ -1247,7 +1189,6 @@ class DateUtilImplTest {
         assertThat(newResult).isTrue()
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `timeString correctly formats time during non-existent DST spring forward gap and matches old behavior`() {
         // On March 12, 2023, in New York, 2:30 AM does not exist.
@@ -1265,7 +1206,6 @@ class DateUtilImplTest {
             assertThat(newResult).isEqualTo(oldResult)
         }
     }
-
     @Test
     fun `timeString correctly formats ambiguous time during DST fall back and matches old behavior`() {
         // On Nov 5, 2023, in New York, 1:30 AM happens twice.
@@ -1286,7 +1226,6 @@ class DateUtilImplTest {
             assertThat(oldResultAfter).isEqualTo(resultAfter)
         }
     }
-
     @Test
     fun `age calculation is correct across DST spring forward and matches old behavior`() {
         // A duration that starts just before the DST gap and ends just after.
@@ -1304,7 +1243,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `age calculation is correct across DST fall back and matches old behavior`() {
         // In New York on Nov 5, 2023, the clock goes from 1:59 EDT to 1:00 EST.
@@ -1322,7 +1260,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expected)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `isSameDay is false for times just under 24 hours apart across DST and matches old behavior`() {
         // Spring forward day (March 12) is only 23 hours long.
@@ -1338,7 +1275,6 @@ class DateUtilImplTest {
         assertThat(isSame).isEqualTo(isSameOld)
         assertThat(isDifferent).isEqualTo(isDifferentOld)
     }
-
     @Test
     fun `beginOfDay works correctly on DST fall back day and matches old behavior`() {
         // On Nov 5, the day is 25 hours long, but beginOfDay should still find the start.
@@ -1350,7 +1286,6 @@ class DateUtilImplTest {
         assertThat(newResult).isEqualTo(expectedStartOfDay)
         assertThat(newResult).isEqualTo(oldResult)
     }
-
     @Test
     fun `getTimeZoneOffsetMinutes works for European DST and matches old behavior`() {
         // This test MUST change the global default timezone because the functions
@@ -1396,6 +1331,7 @@ class DateUtilImplTest {
     }
     //endregion
 
+
     //region Formatting Utilities
     @Test
     fun `qs formats numbers correctly and matches old behavior`() {
@@ -1427,7 +1363,7 @@ class DateUtilImplTest {
     }
 //endregion
 
-    /**
+     /**
      * A fake implementation of ResourceHelper for unit testing.
      * This class implements the full ResourceHelper interface, providing predictable values.
      */
@@ -1437,49 +1373,47 @@ class DateUtilImplTest {
         override fun gs(id: Int): String = getStringForId(id)
         override fun gs(id: Int, vararg args: Any?): String {
             return when (id) {
-                app.aaps.core.interfaces.R.string.minago      -> "${args.firstOrNull() ?: ""} min ago"
+                app.aaps.core.interfaces.R.string.minago -> "${args.firstOrNull() ?: ""} min ago"
                 app.aaps.core.interfaces.R.string.minago_long -> "${args.firstOrNull() ?: ""} minutes ago"
-                app.aaps.core.interfaces.R.string.secago      -> "${args.firstOrNull() ?: ""} sec ago"
-
-                app.aaps.core.interfaces.R.string.hoursago    -> {
+                app.aaps.core.interfaces.R.string.secago -> "${args.firstOrNull() ?: ""} sec ago"
+                app.aaps.core.interfaces.R.string.hoursago -> {
                     val hours = when (val arg = args.firstOrNull()) {
                         is Double -> arg.toLong()
-                        is Long   -> arg
-                        else      -> 0L
+                        is Long -> arg
+                        else -> 0L
                     }
                     "${hours} hours ago"
                 }
-
                 app.aaps.core.interfaces.R.string.days_ago_round,
-                app.aaps.core.interfaces.R.string.days_ago    -> {
+                app.aaps.core.interfaces.R.string.days_ago -> {
                     val days = when (val arg = args.firstOrNull()) {
                         is Double -> arg.toLong()
-                        is Long   -> arg
-                        else      -> 0L
+                        is Long -> arg
+                        else -> 0L
                     }
                     "${days} days ago"
                 }
                 // Add more formatted strings here as needed by other tests
-                else                                          -> getStringForId(id)
+                else -> getStringForId(id)
             }
         }
 
         private fun getStringForId(id: Int): String {
             return when (id) {
-                app.aaps.core.interfaces.R.string.shortday     -> "d"
-                app.aaps.core.interfaces.R.string.shorthour    -> "h"
-                app.aaps.core.interfaces.R.string.shortminute  -> "m"
+                app.aaps.core.interfaces.R.string.shortday -> "d"
+                app.aaps.core.interfaces.R.string.shorthour -> "h"
+                app.aaps.core.interfaces.R.string.shortminute -> "m"
                 app.aaps.core.interfaces.R.string.unit_seconds -> "seconds"
                 app.aaps.core.interfaces.R.string.unit_minutes -> "minutes"
-                app.aaps.core.interfaces.R.string.unit_hours   -> "hours"
-                app.aaps.core.interfaces.R.string.unit_days    -> "days"
-                app.aaps.core.interfaces.R.string.unit_weeks   -> "weeks"
-                app.aaps.core.interfaces.R.string.hours        -> "hours"
-                app.aaps.core.interfaces.R.string.today        -> "Today"
-                app.aaps.core.interfaces.R.string.yesterday    -> "Yesterday"
-                app.aaps.core.interfaces.R.string.tomorrow     -> "Tomorrow"
-                app.aaps.core.interfaces.R.string.later_today  -> "Later today"
-                else                                           -> "unhandled" // Default for unhandled resources
+                app.aaps.core.interfaces.R.string.unit_hours -> "hours"
+                app.aaps.core.interfaces.R.string.unit_days -> "days"
+                app.aaps.core.interfaces.R.string.unit_weeks -> "weeks"
+                app.aaps.core.interfaces.R.string.hours -> "hours"
+                app.aaps.core.interfaces.R.string.today -> "Today"
+                app.aaps.core.interfaces.R.string.yesterday -> "Yesterday"
+                app.aaps.core.interfaces.R.string.tomorrow -> "Tomorrow"
+                app.aaps.core.interfaces.R.string.later_today -> "Later today"
+                else -> "unhandled" // Default for unhandled resources
             }
         }
 
@@ -1497,5 +1431,8 @@ class DateUtilImplTest {
         override fun dpToPx(dp: Int): Int = dp
         override fun dpToPx(dp: Float): Int = dp.toInt()
         override fun shortTextMode(): Boolean = true
+        override fun gac(attributeId: Int): Int = 0
+        override fun gac(context: Context?, attributeId: Int): Int = 0
+        override fun getThemedCtx(context: Context): Context = context
     }
 }

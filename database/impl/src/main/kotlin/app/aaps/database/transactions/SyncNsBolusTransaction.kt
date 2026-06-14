@@ -7,7 +7,7 @@ import app.aaps.database.entities.Bolus
  */
 class SyncNsBolusTransaction(private val boluses: List<Bolus>) : Transaction<SyncNsBolusTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
 
         for (bolus in boluses) {

@@ -13,21 +13,22 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class UpdateConnectionTask @Inject constructor(
     private val patchStateManager: PatchStateManager
 ) : TaskBase(TaskFunc.UPDATE_CONNECTION) {
 
-    @Inject lateinit var updateConnection: UpdateConnection
+    private val UPDATE_CONNECTION: UpdateConnection = UpdateConnection()
 
     fun update(): Single<PatchState> {
         return isReady().concatMapSingle<PatchState>(Function { updateJob() }).firstOrError()
     }
 
     fun updateJob(): Single<PatchState> {
-        return updateConnection.get()
+        return UPDATE_CONNECTION.get()
             .doOnSuccess(Consumer { response: UpdateConnectionResponse -> this.checkResponse(response) })
-            .map<ByteArray>(Function { obj: UpdateConnectionResponse -> obj.patchState })
+            .map<ByteArray>(Function { obj: UpdateConnectionResponse -> obj.getPatchState() })
             .map<PatchState>(Function { bytes: ByteArray -> create(bytes, System.currentTimeMillis()) })
             .doOnSuccess(Consumer { patchState: PatchState -> this.onUpdateConnection(patchState) })
             .doOnError(Consumer { e: Throwable -> aapsLogger.error(LTag.PUMPCOMM, e.message ?: "UpdateConnectionTask error") })

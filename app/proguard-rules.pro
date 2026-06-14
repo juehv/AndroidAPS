@@ -24,7 +24,3 @@
 
 -keep public class * extends android.support.v4.** {*;}
 -keep public class * extends android.app.Fragment
-
-# Glance AppWidget
--keep class * extends androidx.glance.appwidget.GlanceAppWidget { *; }
--keep class * extends androidx.glance.appwidget.GlanceAppWidgetReceiver { *; }

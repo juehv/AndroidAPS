@@ -6,7 +6,6 @@ import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TrendArrow
 import app.aaps.plugins.automation.elements.Comparator
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -21,7 +20,7 @@ class TriggerBgTest : TriggerTestBase() {
     }
 
     @Test
-    fun shouldRunTest() = runTest {
+    fun shouldRunTest() {
         whenever(autosensDataStore.getBucketedDataTableCopy()).thenReturn(generateOneCurrentRecordBgData())
         var t: TriggerBg = TriggerBg(injector).setUnits(GlucoseUnit.MMOL).setValue(4.1).comparator(Comparator.Compare.IS_EQUAL)
         assertThat(t.shouldRun()).isFalse()
@@ -49,7 +48,7 @@ class TriggerBgTest : TriggerTestBase() {
     }
 
     @Test
-    fun copyConstructorTest() = runTest {
+    fun copyConstructorTest() {
         val t: TriggerBg = TriggerBg(injector).setUnits(GlucoseUnit.MGDL).setValue(213.0).comparator(Comparator.Compare.IS_EQUAL_OR_LESSER)
         val t1 = t.duplicate() as TriggerBg
         assertThat(t1.bg.value).isWithin(0.01).of(213.0)
@@ -60,18 +59,23 @@ class TriggerBgTest : TriggerTestBase() {
     private var bgJson = "{\"data\":{\"comparator\":\"IS_EQUAL\",\"bg\":4.1,\"units\":\"mmol\"},\"type\":\"TriggerBg\"}"
 
     @Test
-    fun toJSONTest() = runTest {
+    fun toJSONTest() {
         val t: TriggerBg = TriggerBg(injector).setUnits(GlucoseUnit.MMOL).setValue(4.1).comparator(Comparator.Compare.IS_EQUAL)
         JSONAssert.assertEquals(bgJson, t.toJSON(), true)
     }
 
     @Test
-    fun fromJSONTest() = runTest {
+    fun fromJSONTest() {
         val t: TriggerBg = TriggerBg(injector).setUnits(GlucoseUnit.MMOL).setValue(4.1).comparator(Comparator.Compare.IS_EQUAL)
         val t2 = TriggerDummy(injector).instantiate(JSONObject(t.toJSON())) as TriggerBg
         assertThat(t2.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL)
         assertThat(t2.bg.value).isWithin(0.01).of(4.1)
         assertThat(t2.bg.units).isEqualTo(GlucoseUnit.MMOL)
+    }
+
+    @Test
+    fun iconTest() {
+        assertThat(TriggerBg(injector).icon().get()).isEqualTo(app.aaps.core.objects.R.drawable.ic_cp_bgcheck)
     }
 
     private fun generateOneCurrentRecordBgData(): MutableList<InMemoryGlucoseValue> {

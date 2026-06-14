@@ -1,8 +1,5 @@
 package app.aaps.core.nssdk.localmodel.entry
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class NSSgvV3(
     var date: Long?,
     val device: String? = null, // sourceSensor

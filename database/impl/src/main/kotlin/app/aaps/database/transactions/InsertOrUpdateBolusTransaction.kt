@@ -9,7 +9,7 @@ class InsertOrUpdateBolusTransaction(
     private val bolus: Bolus
 ) : Transaction<InsertOrUpdateBolusTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
         val current = database.bolusDao.findById(bolus.id)
         if (current == null) {

@@ -12,7 +12,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-@Deprecated("Remove with NSClient")
 class DataWorkerStorage @Inject constructor(
     private val context: Context
 ) {

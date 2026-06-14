@@ -37,10 +37,6 @@ data class UserEntry(
         EXTENDED_CARBS,
         TEMP_BASAL,
         TT,
-        NEW_INSULIN,
-        STORE_INSULIN,
-        CHANGE_PUMP_INSULIN,
-        CHANGE_INSULIN_CONCENTRATION,
         NEW_PROFILE,
         CLONE_PROFILE,
         STORE_PROFILE,
@@ -79,11 +75,9 @@ data class UserEntry(
         TT_NS_REFRESH,
         AUTOMATION_REMOVED,
         BG_REMOVED,
-        CALIBRATION_REMOVED,
         CAREPORTAL_REMOVED,
         EXTENDED_BOLUS_REMOVED,
         FOOD_REMOVED,
-        INSULIN_REMOVED,
         PROFILE_REMOVED,
         PROFILE_SWITCH_REMOVED,
         RESTART_EVENTS_REMOVED,
@@ -125,8 +119,6 @@ data class UserEntry(
         RUNNING_MODE,
         RUNNING_MODE_REMOVED,
         RUNNING_MODE_UPDATED,
-        SCENE_ACTIVATED,
-        SCENE_DEACTIVATED,
         UNKNOWN
         ;
     }
@@ -143,7 +135,6 @@ data class UserEntry(
         LoopDialog,
         TempBasalDialog,
         CalibrationDialog,
-        ConcentrationDialog,
         FillDialog,
         SiteRotationDialog,
         BgCheck,
@@ -169,7 +160,6 @@ data class UserEntry(
         Glunovo,
         Intelligo,
         Xdrip,
-        Insulin,            //From Insulin plugin
         LocalProfile,       //From LocalProfile plugin
         Loop,               //From Loop plugin
         Maintenance,        //From Maintenance plugin
@@ -197,7 +187,6 @@ data class UserEntry(
         VirtualPump,
         Random,
         SMS,                //From SMS plugin
-        NfcCommands,        //From NFC Commands plugin
         Treatments,         //From Treatments plugin
         Wear,               //From Wear plugin
         Food,               //From Food plugin
@@ -207,9 +196,6 @@ data class UserEntry(
         SyaiTag,            //From Syai Tag plugin
         SiBionic,
         Sino,
-        Instara,            // From Instara plugin
-        NotificationReader,
-        Scene,              //From Scene activation
         Stats,              //From Stat Activity
         Aaps,               // MainApp
         BgFragment,

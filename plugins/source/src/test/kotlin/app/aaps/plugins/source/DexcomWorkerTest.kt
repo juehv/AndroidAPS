@@ -10,18 +10,17 @@ import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.keys.BooleanKey
-import app.aaps.core.utils.receivers.DataInbox
+import app.aaps.core.utils.receivers.DataWorkerStorage
 import app.aaps.shared.tests.BundleMock
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
-import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -32,40 +31,36 @@ class DexcomWorkerTest : TestBaseWithProfile() {
     @Mock lateinit var dexcomPlugin: DexcomPlugin
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var workerParameters: WorkerParameters
-    @Mock lateinit var dataInbox: DataInbox
+    @Mock lateinit var dataWorkerStorage: DataWorkerStorage
+
+    init {
+        addInjector { injector ->
+            if (injector is DexcomPlugin.DexcomWorker) {
+                injector.aapsLogger = aapsLogger
+                injector.dexcomPlugin = dexcomPlugin
+                injector.persistenceLayer = persistenceLayer
+                injector.dataWorkerStorage = dataWorkerStorage
+                injector.dateUtil = dateUtil
+                injector.preferences = preferences
+                injector.profileUtil = profileUtil
+            }
+        }
+    }
 
     @BeforeEach
     fun setupMock() {
-        whenever(workerParameters.inputData).thenReturn(workDataOf())
-        worker = DexcomPlugin.DexcomWorker(context, workerParameters, aapsLogger, fabricPrivacy, dexcomPlugin, preferences, dateUtil, dataInbox, persistenceLayer, profileUtil)
+        whenever(workerParameters.inputData).thenReturn(workDataOf(DataWorkerStorage.STORE_KEY to 1L))
+        worker = DexcomPlugin.DexcomWorker(context, workerParameters)
     }
 
     @Test
     fun `When plugin disabled then return success`() {
-        runTest {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(false)
 
             val result = worker.doWork()
 
             Assertions.assertEquals(ListenableWorker.Result.success(workDataOf("Result" to "Plugin not enabled")), result)
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), any())
-        }
-    }
-
-    @Test
-    fun `When plugin disabled the inbox is still drained so the pending-work gate clears`() {
-        runTest {
-            whenever(dexcomPlugin.isEnabled()).thenReturn(false)
-            val bundle = validBundle((now - 60000) / 1000L)
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(listOf(bundle))
-
-            val result = worker.doWork()
-
-            Assertions.assertEquals(ListenableWorker.Result.success(workDataOf("Result" to "Plugin not enabled")), result)
-            // Regression: drain() MUST run even when disabled, otherwise DataInbox's pending-work
-            // flag stays set and silently wedges all future enqueues until the process restarts.
-            verify(dataInbox).drain(DexcomInbox)
-            // Data drained while disabled is intentionally discarded, not stored.
             verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), any())
         }
     }
@@ -73,10 +68,10 @@ class DexcomWorkerTest : TestBaseWithProfile() {
     @Test
     fun `When plugin enabled then insert G6 data`() {
         val timestamp = (now - 60000) / 1000L
-        runTest {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(true)
             whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
             val bundle = BundleMock.mocked().apply {
                 putString("sensorType", "G6")
                 putBundle("glucoseValues", BundleMock.mocked().apply {
@@ -94,7 +89,7 @@ class DexcomWorkerTest : TestBaseWithProfile() {
                 })
                 putLong("sensorInsertionTime", timestamp)
             }
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(listOf(bundle))
+            whenever(dataWorkerStorage.pickupBundle(any())).thenReturn(bundle)
 
             val result = worker.doWork()
 
@@ -119,10 +114,10 @@ class DexcomWorkerTest : TestBaseWithProfile() {
     @Test
     fun `When plugin enabled then insert G7 data with too old calibrations and insertions`() {
         val timestamp = (now - 60000) / 1000L
-        runTest {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(true)
             whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
             val bundle = BundleMock.mocked().apply {
                 putString("sensorType", "G7")
                 putBundle("glucoseValues", BundleMock.mocked().apply {
@@ -140,7 +135,7 @@ class DexcomWorkerTest : TestBaseWithProfile() {
                 })
                 putLong("sensorInsertionTime", 10000L)
             }
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(listOf(bundle))
+            whenever(dataWorkerStorage.pickupBundle(any())).thenReturn(bundle)
 
             val result = worker.doWork()
 
@@ -160,10 +155,10 @@ class DexcomWorkerTest : TestBaseWithProfile() {
     @Test
     fun `When plugin enabled then insert unknown Dexcom data`() {
         val timestamp = (now - 60000) / 1000L
-        runTest {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(true)
             whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
             val bundle = BundleMock.mocked().apply {
                 putString("sensorType", "G9")
                 putBundle("glucoseValues", BundleMock.mocked().apply {
@@ -174,7 +169,7 @@ class DexcomWorkerTest : TestBaseWithProfile() {
                     })
                 })
             }
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(listOf(bundle))
+            whenever(dataWorkerStorage.pickupBundle(any())).thenReturn(bundle)
 
             val result = worker.doWork()
 
@@ -192,66 +187,29 @@ class DexcomWorkerTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `When inbox is empty then return success with no-data marker`() {
-        runTest {
+    fun `When bundle is missing then return failure`() {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(true)
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(emptyList())
+            whenever(dataWorkerStorage.pickupBundle(1L)).thenReturn(null)
 
             val result = worker.doWork()
 
-            Assertions.assertEquals(ListenableWorker.Result.success(workDataOf("Result" to "no data")), result)
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), any())
+            Assertions.assertEquals(ListenableWorker.Result.failure(workDataOf("Error" to "missing input data")), result)
         }
     }
 
     @Test
-    fun `When processing is cancelled then unprocessed bundles are re-queued and cancellation propagates`() {
-        val timestamp = (now - 60000) / 1000L
-        runTest {
-            whenever(dexcomPlugin.isEnabled()).thenReturn(true)
-            whenever(preferences.get(BooleanKey.BgSourceCreateSensorChange)).thenReturn(true)
-            val bundle1 = validBundle(timestamp - 60)
-            val bundle2 = validBundle(timestamp)
-            val bundles = listOf(bundle1, bundle2)
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(bundles)
-            // Simulate WorkManager cancelling the coroutine during the first DB write.
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull()))
-                .thenThrow(CancellationException("Job was cancelled"))
-
-            val thrown = runCatching { worker.doWork() }.exceptionOrNull()
-
-            // Cancellation must propagate, not be swallowed as a per-bundle failure.
-            Assertions.assertTrue(thrown is CancellationException)
-            // Nothing was committed, so the whole drained batch is re-queued for the next run.
-            verify(dataInbox).requeue(eq(DexcomInbox), eq(bundles))
-        }
-    }
-
-    @Test
-    fun `When glucoseValues are missing the bundle is skipped`() {
-        runTest {
+    fun `When glucoseValues are missing then return failure`() {
+        runBlocking {
             whenever(dexcomPlugin.isEnabled()).thenReturn(true)
             val bundle = BundleMock.mocked().apply {
                 putString("sensorType", "G6")
             }
-            whenever(dataInbox.drain(eq(DexcomInbox))).thenReturn(listOf(bundle))
+            whenever(dataWorkerStorage.pickupBundle(any())).thenReturn(bundle)
 
             val result = worker.doWork()
 
-            // Batch returns success even when some bundles are skipped; verify no insert happened.
-            Assertions.assertEquals(ListenableWorker.Result.success(), result)
-            verify(persistenceLayer, never()).insertCgmSourceData(any(), any(), any(), any())
+            Assertions.assertEquals(ListenableWorker.Result.failure(workDataOf("Error" to "missing glucoseValues")), result)
         }
-    }
-
-    private fun validBundle(timestamp: Long) = BundleMock.mocked().apply {
-        putString("sensorType", "G6")
-        putBundle("glucoseValues", BundleMock.mocked().apply {
-            putBundle("0", BundleMock.mocked().apply {
-                putLong("timestamp", timestamp)
-                putInt("glucoseValue", 150)
-                putString("trendArrow", "FortyFiveDown")
-            })
-        })
     }
 }

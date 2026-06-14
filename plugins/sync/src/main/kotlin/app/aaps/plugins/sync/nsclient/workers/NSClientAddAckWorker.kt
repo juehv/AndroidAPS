@@ -2,13 +2,12 @@ package app.aaps.plugins.sync.nsclient.workers
 
 import android.content.Context
 import android.os.SystemClock
-import androidx.hilt.work.HiltWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import app.aaps.core.interfaces.logging.AAPSLogger
-import app.aaps.core.interfaces.nsclient.NSClientRepository
 import app.aaps.core.interfaces.nsclient.StoreDataForDb
 import app.aaps.core.interfaces.rx.AapsSchedulers
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventNSClientNewLog
 import app.aaps.core.interfaces.sync.DataSyncSelector
 import app.aaps.core.interfaces.sync.DataSyncSelector.PairBolus
 import app.aaps.core.interfaces.sync.DataSyncSelector.PairBolusCalculatorResult
@@ -22,29 +21,25 @@ import app.aaps.core.interfaces.sync.DataSyncSelector.PairProfileSwitch
 import app.aaps.core.interfaces.sync.DataSyncSelector.PairTemporaryBasal
 import app.aaps.core.interfaces.sync.DataSyncSelector.PairTemporaryTarget
 import app.aaps.core.interfaces.sync.DataSyncSelector.PairTherapyEvent
-import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.workflow.LoggingWorker
 import app.aaps.core.utils.notifyAll
 import app.aaps.core.utils.receivers.DataWorkerStorage
 import app.aaps.plugins.sync.nsclient.acks.NSAddAck
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import javax.inject.Inject
 
-@HiltWorker
-class NSClientAddAckWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
-    aapsLogger: AAPSLogger,
-    fabricPrivacy: FabricPrivacy,
-    private val dataWorkerStorage: DataWorkerStorage,
-    private val aapsSchedulers: AapsSchedulers,
-    private val preferences: Preferences,
-    private val storeDataForDb: StoreDataForDb,
-    private val nsClientRepository: NSClientRepository
-) : LoggingWorker(context, params, Dispatchers.Default, aapsLogger, fabricPrivacy) {
+class NSClientAddAckWorker(
+    context: Context,
+    params: WorkerParameters
+) : LoggingWorker(context, params, Dispatchers.Default) {
+
+    @Inject lateinit var dataWorkerStorage: DataWorkerStorage
+    @Inject lateinit var rxBus: RxBus
+    @Inject lateinit var aapsSchedulers: AapsSchedulers
+    @Inject lateinit var preferences: Preferences
+    @Inject lateinit var storeDataForDb: StoreDataForDb
 
     override suspend fun doWorkAndLog(): Result {
         val ack = dataWorkerStorage.pickupObject(inputData.getLong(DataWorkerStorage.STORE_KEY, -1)) as NSAddAck?
@@ -64,7 +59,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdTemporaryTargets(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked TemporaryTarget " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked TemporaryTarget " + pair.value.ids.nightscoutId))
             }
 
             is PairGlucoseValue                  -> {
@@ -73,7 +68,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdGlucoseValues(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked GlucoseValue " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked GlucoseValue " + pair.value.ids.nightscoutId))
             }
 
             is PairFood                          -> {
@@ -82,7 +77,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdFoods(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked Food " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked Food " + pair.value.ids.nightscoutId))
                 // Send new if waiting
             }
 
@@ -92,7 +87,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdTherapyEvents(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked TherapyEvent " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked TherapyEvent " + pair.value.ids.nightscoutId))
             }
 
             is PairBolus                         -> {
@@ -101,7 +96,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdBoluses(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked Bolus " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked Bolus " + pair.value.ids.nightscoutId))
             }
 
             is PairCarbs                         -> {
@@ -110,7 +105,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdCarbs(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked Carbs " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked Carbs " + pair.value.ids.nightscoutId))
             }
 
             is PairBolusCalculatorResult         -> {
@@ -118,7 +113,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.value.ids.nightscoutId = ack.id
                 storeDataForDb.addToNsIdBolusCalculatorResults(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked BolusCalculatorResult " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked BolusCalculatorResult " + pair.value.ids.nightscoutId))
             }
 
             is PairTemporaryBasal                -> {
@@ -127,7 +122,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdTemporaryBasals(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked TemporaryBasal " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked TemporaryBasal " + pair.value.ids.nightscoutId))
             }
 
             is PairExtendedBolus                 -> {
@@ -136,7 +131,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdExtendedBoluses(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked ExtendedBolus " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked ExtendedBolus " + pair.value.ids.nightscoutId))
             }
 
             is PairProfileSwitch                 -> {
@@ -145,7 +140,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdProfileSwitches(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked ProfileSwitch " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked ProfileSwitch " + pair.value.ids.nightscoutId))
             }
 
             is PairEffectiveProfileSwitch        -> {
@@ -154,7 +149,7 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdEffectiveProfileSwitches(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked EffectiveProfileSwitch " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked EffectiveProfileSwitch " + pair.value.ids.nightscoutId))
             }
 
             is DataSyncSelector.PairDeviceStatus -> {
@@ -163,22 +158,22 @@ class NSClientAddAckWorker @AssistedInject constructor(
                 pair.confirmed = true
                 storeDataForDb.addToNsIdDeviceStatuses(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked DeviceStatus " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked DeviceStatus " + pair.value.ids.nightscoutId))
             }
 
             is PairProfileStore                  -> {
                 val pair = ack.originalObject
                 pair.confirmed = true
-                nsClientRepository.addLog("◄ DBADD", "Acked ProfileStore " + ack.id)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked ProfileStore " + ack.id))
             }
 
-            is DataSyncSelector.PairRunningMode  -> {
+            is DataSyncSelector.PairRunningMode -> {
                 val pair = ack.originalObject
                 pair.value.ids.nightscoutId = ack.id
                 pair.confirmed = true
                 storeDataForDb.addToNsIdRunningModes(pair.value)
                 storeDataForDb.scheduleNsIdUpdate()
-                nsClientRepository.addLog("◄ DBADD", "Acked RunningMode " + pair.value.ids.nightscoutId)
+                rxBus.send(EventNSClientNewLog("◄ DBADD", "Acked RunningMode " + pair.value.ids.nightscoutId))
             }
 
         }

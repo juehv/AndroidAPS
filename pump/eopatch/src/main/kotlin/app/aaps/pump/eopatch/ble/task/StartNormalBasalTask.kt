@@ -13,20 +13,21 @@ import java.lang.Exception
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class StartNormalBasalTask @Inject constructor(
     val patchStateManager: PatchStateManager,
     val aapsSchedulers: AapsSchedulers,
 ) : TaskBase(TaskFunc.START_NORMAL_BASAL) {
 
-    @Inject lateinit var basalScheduleSetBig: BasalScheduleSetBig
+    private val BASAL_SCHEDULE_SET_BIG: BasalScheduleSetBig = BasalScheduleSetBig()
 
     fun start(basal: NormalBasal): Single<BasalScheduleSetResponse> {
         return isReady().concatMapSingle<BasalScheduleSetResponse>(Function { startJob(basal) }).firstOrError()
     }
 
     fun startJob(basal: NormalBasal): Single<BasalScheduleSetResponse> {
-        return basalScheduleSetBig.set(basal.doseUnitPerSegmentArray)
+        return BASAL_SCHEDULE_SET_BIG.set(basal.doseUnitPerSegmentArray)
             .doOnSuccess(Consumer { response: BasalScheduleSetResponse -> this.checkResponse(response) })
             .observeOn(aapsSchedulers.io)
             .doOnSuccess(Consumer { v: BasalScheduleSetResponse -> onStartNormalBasalResponse(v, basal) })
@@ -34,7 +35,7 @@ class StartNormalBasalTask @Inject constructor(
     }
 
     private fun onStartNormalBasalResponse(response: BasalScheduleSetResponse, basal: NormalBasal) {
-        val timeStamp = response.timestamp
+        val timeStamp = response.getTimestamp()
         patchStateManager.onBasalStarted(basal, timeStamp + 1000)
 
         normalBasalManager.normalBasal = basal

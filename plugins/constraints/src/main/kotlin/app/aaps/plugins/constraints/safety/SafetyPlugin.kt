@@ -1,7 +1,9 @@
 package app.aaps.plugins.constraints.safety
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Shield
+import android.content.Context
+import androidx.preference.PreferenceCategory
+import androidx.preference.PreferenceManager
+import androidx.preference.PreferenceScreen
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.pump.defs.PumpDescription
 import app.aaps.core.interfaces.configuration.Config
@@ -11,9 +13,7 @@ import app.aaps.core.interfaces.constraints.PluginConstraints
 import app.aaps.core.interfaces.constraints.Safety
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.AAPSLogger
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationLevel
-import app.aaps.core.interfaces.notifications.NotificationManager
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.plugin.PluginDescription
@@ -21,6 +21,7 @@ import app.aaps.core.interfaces.profile.Profile
 import app.aaps.core.interfaces.pump.defs.determineCorrectBolusSize
 import app.aaps.core.interfaces.pump.defs.determineCorrectExtendedBolusSize
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.interfaces.utils.HardLimits
@@ -29,13 +30,14 @@ import app.aaps.core.keys.DoubleKey
 import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.keys.interfaces.withEntries
 import app.aaps.core.objects.constraints.ConstraintObject
 import app.aaps.core.objects.extensions.put
 import app.aaps.core.objects.extensions.store
-import app.aaps.core.ui.compose.preference.PreferenceSubScreenDef
+import app.aaps.core.validators.preferences.AdaptiveDoublePreference
+import app.aaps.core.validators.preferences.AdaptiveIntPreference
+import app.aaps.core.validators.preferences.AdaptiveListPreference
 import app.aaps.plugins.constraints.R
-import kotlinx.serialization.json.JsonObject
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,15 +52,16 @@ class SafetyPlugin @Inject constructor(
     private val config: Config,
     private val persistenceLayer: PersistenceLayer,
     private val dateUtil: DateUtil,
-    private val notificationManager: NotificationManager,
+    private val uiInteraction: UiInteraction,
     private val decimalFormatter: DecimalFormatter
 ) : PluginBase(
     PluginDescription()
         .mainType(PluginType.CONSTRAINTS)
+        .neverVisible(true)
         .alwaysEnabled(true)
         .showInList { false }
         .pluginName(R.string.safety)
-        .icon(Icons.Default.Shield),
+        .preferencesId(PluginDescription.PREFERENCE_SCREEN),
     aapsLogger, rh
 ), PluginConstraints, Safety {
 
@@ -70,10 +73,10 @@ class SafetyPlugin @Inject constructor(
         return value
     }
 
-    override suspend fun isClosedLoopAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
+    override fun isClosedLoopAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
         if (!config.isEngineeringModeOrRelease()) {
             if (value.value()) {
-                notificationManager.post(NotificationId.TOAST_ALARM, R.string.closed_loop_disabled_on_dev_branch, level = NotificationLevel.NORMAL)
+                uiInteraction.addNotification(Notification.TOAST_ALARM, rh.gs(R.string.closed_loop_disabled_on_dev_branch), Notification.NORMAL)
             }
             value.set(false, rh.gs(R.string.closed_loop_disabled_on_dev_branch), this)
         }
@@ -84,14 +87,15 @@ class SafetyPlugin @Inject constructor(
         return value
     }
 
-    override suspend fun isSMBModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+    override fun isSMBModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
         val closedLoop = constraintChecker.isClosedLoopAllowed()
         if (!closedLoop.value()) value.set(false, rh.gs(R.string.smbnotallowedinopenloopmode), this)
         return value
     }
 
-    override suspend fun isAdvancedFilteringEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
-        if (!persistenceLayer.isAdvancedFilteringSupported()) value.set(false, rh.gs(R.string.smbalwaysdisabled), this)
+    override fun isAdvancedFilteringEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+        val bgSource = activePlugin.activeBgSource
+        if (!bgSource.advancedFilteringSupported()) value.set(false, rh.gs(R.string.smbalwaysdisabled), this)
         return value
     }
 
@@ -164,29 +168,39 @@ class SafetyPlugin @Inject constructor(
         return carbs
     }
 
-    override fun configuration(): JsonObject =
-        JsonObject(emptyMap())
+    override fun configuration(): JSONObject =
+        JSONObject()
             .put(StringKey.SafetyAge, preferences)
             .put(DoubleKey.SafetyMaxBolus, preferences)
             .put(IntKey.SafetyMaxCarbs, preferences)
 
-    override fun applyConfiguration(configuration: JsonObject) {
+    override fun applyConfiguration(configuration: JSONObject) {
         configuration
             .store(StringKey.SafetyAge, preferences)
             .store(DoubleKey.SafetyMaxBolus, preferences)
             .store(IntKey.SafetyMaxCarbs, preferences)
     }
 
-    override fun getPreferenceScreenContent() = PreferenceSubScreenDef(
-        key = "safety_settings",
-        titleResId = R.string.safety,
-        items = listOf(
-            StringKey.SafetyAge.withEntries(
-                hardLimits.ageEntryValues().zip(hardLimits.ageEntries()).associate { it.first.toString() to it.second.toString() }
-            ),
-            DoubleKey.SafetyMaxBolus,
-            IntKey.SafetyMaxCarbs
-        ),
-        icon = pluginDescription.icon
-    )
+    override fun addPreferenceScreen(preferenceManager: PreferenceManager, parent: PreferenceScreen, context: Context, requiredKey: String?) {
+        if (requiredKey != null) return
+        val category = PreferenceCategory(context)
+        parent.addPreference(category)
+        category.apply {
+            key = "safety_settings"
+            title = rh.gs(R.string.treatmentssafety_title)
+            initialExpandedChildrenCount = 0
+            addPreference(
+                AdaptiveListPreference(
+                    ctx = context,
+                    stringKey = StringKey.SafetyAge,
+                    summary = app.aaps.core.ui.R.string.patient_age_summary,
+                    title = app.aaps.core.ui.R.string.patient_type,
+                    entries = hardLimits.ageEntries(),
+                    entryValues = hardLimits.ageEntryValues()
+                )
+            )
+            addPreference(AdaptiveDoublePreference(ctx = context, doubleKey = DoubleKey.SafetyMaxBolus, title = app.aaps.core.ui.R.string.max_bolus_title))
+            addPreference(AdaptiveIntPreference(ctx = context, intKey = IntKey.SafetyMaxCarbs, title = app.aaps.core.ui.R.string.max_carbs_title))
+        }
+    }
 }

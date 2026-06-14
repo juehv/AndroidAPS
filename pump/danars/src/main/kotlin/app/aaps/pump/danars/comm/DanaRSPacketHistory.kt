@@ -11,7 +11,6 @@ import app.aaps.pump.dana.comm.RecordTypes
 import app.aaps.pump.dana.database.DanaHistoryRecord
 import app.aaps.pump.dana.database.DanaHistoryRecordDao
 import app.aaps.pump.dana.events.EventDanaRSyncStatus
-import kotlinx.coroutines.runBlocking
 import org.joda.time.DateTime
 import java.util.Calendar
 import java.util.GregorianCalendar
@@ -25,7 +24,7 @@ abstract class DanaRSPacketHistory internal constructor(
     private val danaPump: DanaPump
 ) : DanaRSPacket() {
 
-    protected var from: Long = 0
+    protected val from: Long = 0
 
     protected var year = 0
     protected var month = 0
@@ -34,12 +33,12 @@ abstract class DanaRSPacketHistory internal constructor(
     protected var min = 0
     protected var sec = 0
 
-    @Volatile var done = false
+    var done = false
     var totalCount = 0
     val danaRHistoryRecord = DanaHistoryRecord(0)
 
     fun with(from: Long) = this.also {
-        it.from = from
+        it.from == from
         val cal = GregorianCalendar()
         if (it.from != 0L) cal.timeInMillis = it.from
         else cal[2000, 0, 1, 0, 0] = 0
@@ -230,17 +229,15 @@ abstract class DanaRSPacketHistory internal constructor(
             danaHistoryRecordDao.createOrUpdate(danaRHistoryRecord)
             //If it is a TDD, store it for stats also.
             if (danaRHistoryRecord.code == RecordTypes.RECORD_TYPE_DAILY) {
-                runBlocking {
-                    pumpSync.createOrUpdateTotalDailyDose(
-                        timestamp = danaRHistoryRecord.timestamp,
-                        bolusAmount = danaRHistoryRecord.dailyBolus,
-                        basalAmount = danaRHistoryRecord.dailyBasal,
-                        totalAmount = 0.0,
-                        pumpId = null,
-                        pumpType = danaPump.pumpType(),
-                        danaPump.serialNumber
-                    )
-                }
+                pumpSync.createOrUpdateTotalDailyDose(
+                    timestamp = danaRHistoryRecord.timestamp,
+                    bolusAmount = danaRHistoryRecord.dailyBolus,
+                    basalAmount = danaRHistoryRecord.dailyBasal,
+                    totalAmount = 0.0,
+                    pumpId = null,
+                    pumpType = danaPump.pumpType(),
+                    danaPump.serialNumber
+                )
             }
             rxBus.send(EventDanaRSyncStatus(dateUtil.dateAndTimeString(danaRHistoryRecord.timestamp) + " " + messageType))
         }

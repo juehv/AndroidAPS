@@ -3,24 +3,20 @@ package app.aaps.plugins.sync.nsclient.data
 import app.aaps.core.interfaces.aps.RT
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.di.ApplicationScope
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.nsclient.ProcessedDeviceStatusData
 import app.aaps.core.interfaces.overview.OverviewData
-import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.workflow.CalculationWorkflow
 import app.aaps.core.keys.BooleanNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.nssdk.interfaces.RunningConfiguration
 import app.aaps.core.nssdk.localmodel.devicestatus.NSDeviceStatus
-import app.aaps.core.utils.JsonHelper.safeGetString
-import app.aaps.core.utils.JsonHelper.safeGetStringAllowNull
+import app.aaps.core.utils.HtmlHelper
+import app.aaps.core.utils.JsonHelper
 import io.reactivex.rxjava3.disposables.CompositeDisposable
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
+import io.reactivex.rxjava3.kotlin.plusAssign
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -87,9 +83,7 @@ class NSDeviceStatusHandler @Inject constructor(
     private val aapsLogger: AAPSLogger,
     private val persistenceLayer: PersistenceLayer,
     private val overviewData: OverviewData,
-    private val calculationWorkflow: CalculationWorkflow,
-    private val rxBus: RxBus,
-    @ApplicationScope private val appScope: CoroutineScope
+    private val calculationWorkflow: CalculationWorkflow
 ) {
 
     private val disposable = CompositeDisposable()
@@ -115,8 +109,6 @@ class NSDeviceStatusHandler @Inject constructor(
                 nsDeviceStatus.pump?.let { preferences.put(BooleanNonKey.ObjectivesPumpStatusIsAvailableInNS, true) }  // Objective 0
             }
         }
-        if (config.AAPSCLIENT && deviceStatuses.isNotEmpty())
-            rxBus.send(EventNsClientStatusUpdated())
     }
 
     private fun updateDeviceData(deviceStatus: NSDeviceStatus) {
@@ -148,16 +140,21 @@ class NSDeviceStatusHandler @Inject constructor(
             }
             pump.extended?.let {
                 val extended = StringBuilder()
-                it.keys.forEach { key -> extended.append("<b>").append(key).append(":</b> ").append(it[key]).append("<br>") }
-                deviceStatusPumpData.extended = extended.toString()
-                deviceStatusPumpData.activeProfileName = it.safeGetStringAllowNull("ActiveProfile", null)
+                val keys: Iterator<*> = it.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next() as String
+                    val value = it.getString(key)
+                    extended.append("<b>").append(key).append(":</b> ").append(value).append("<br>")
+                }
+                deviceStatusPumpData.extended = HtmlHelper.fromHtml(extended.toString())
+                deviceStatusPumpData.activeProfileName = JsonHelper.safeGetStringAllowNull(it, "ActiveProfile", null)
             }
         }
     }
 
     private fun updateOpenApsData(nsDeviceStatus: NSDeviceStatus) {
         nsDeviceStatus.openaps?.suggested?.let {
-            it.safeGetString("timestamp")?.let { timestamp ->
+            JsonHelper.safeGetString(it, "timestamp")?.let { timestamp ->
                 val clock = dateUtil.fromISODateString(timestamp)
                 // check if this is new data
                 if (clock > processedDeviceStatusData.openAPSData.clockSuggested) {
@@ -168,13 +165,13 @@ class NSDeviceStatusHandler @Inject constructor(
                     }
                     processedDeviceStatusData.openAPSData.clockSuggested = clock
                     processedDeviceStatusData.getAPSResult()?.let { apsResult ->
-                        appScope.launch { persistenceLayer.insertOrUpdateApsResult(apsResult) }
+                        disposable += persistenceLayer.insertOrUpdateApsResult(apsResult).subscribe()
                     }
                 }
             }
         }
         nsDeviceStatus.openaps?.enacted?.let {
-            it.safeGetString("timestamp")?.let { timestamp ->
+            JsonHelper.safeGetString(it, "timestamp")?.let { timestamp ->
                 val clock = dateUtil.fromISODateString(timestamp)
                 // check if this is new data
                 if (clock > processedDeviceStatusData.openAPSData.clockEnacted) {

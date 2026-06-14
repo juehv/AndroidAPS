@@ -5,16 +5,20 @@ import app.aaps.core.data.model.TE
 import app.aaps.core.data.pump.defs.PumpDescription
 import app.aaps.core.data.time.T
 import app.aaps.plugins.automation.elements.Comparator
+import app.aaps.pump.virtual.VirtualPumpPlugin
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
+import org.mockito.Mock
 import org.mockito.kotlin.whenever
 import org.skyscreamer.jsonassert.JSONAssert
+import java.util.Optional
 
 class TriggerInsulinAgeTest : TriggerTestBase() {
 
-    @Test fun shouldRunTest() = runTest {
+    @Mock lateinit var virtualPumpPlugin: VirtualPumpPlugin
+
+    @Test fun shouldRunTest() {
         val insulinChangeEvent = TE(glucoseUnit = GlucoseUnit.MGDL, timestamp = now - T.hours(6).msecs(), type = TE.Type.INSULIN_CHANGE)
         whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.INSULIN_CHANGE)).thenReturn(insulinChangeEvent)
         var t: TriggerInsulinAge = TriggerInsulinAge(injector).setValue(1.0).comparator(Comparator.Compare.IS_EQUAL)
@@ -35,7 +39,7 @@ class TriggerInsulinAgeTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isFalse()
     }
 
-    @Test fun shouldRunNotAvailable() = runTest {
+    @Test fun shouldRunNotAvailable() {
         whenever(persistenceLayer.getLastTherapyRecordUpToNow(TE.Type.INSULIN_CHANGE)).thenReturn(null)
         var t = TriggerInsulinAge(injector).apply { comparator.value = Comparator.Compare.IS_NOT_AVAILABLE }
         assertThat(t.shouldRun()).isTrue()
@@ -43,11 +47,12 @@ class TriggerInsulinAgeTest : TriggerTestBase() {
         assertThat(t.shouldRun()).isFalse()
     }
 
-    @Test fun shouldRunPatchPump() = runTest {
+    @Test fun shouldRunPatchPump() {
         val t: TriggerInsulinAge = TriggerInsulinAge(injector).setValue(6.0).comparator(Comparator.Compare.IS_EQUAL)
+        whenever(activePlugin.activePump).thenReturn(virtualPumpPlugin)
         val pumpDescription = PumpDescription()
         pumpDescription.isPatchPump = true
-        whenever(pumpPluginWithConcentration.pumpDescription).thenReturn(pumpDescription)
+        whenever(virtualPumpPlugin.pumpDescription).thenReturn(pumpDescription)
         assertThat(t.shouldRun()).isFalse()
     }
 
@@ -68,5 +73,10 @@ class TriggerInsulinAgeTest : TriggerTestBase() {
         val t2 = TriggerDummy(injector).instantiate(JSONObject(t.toJSON())) as TriggerInsulinAge
         assertThat(t2.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL)
         assertThat(t2.insulinAgeHours.value).isWithin(0.01).of(4.0)
+    }
+
+    @Test fun iconTest() {
+        val t= TriggerInsulinAge(injector)
+        assertThat(t.icon()).isEqualTo(Optional.of(app.aaps.core.objects.R.drawable.ic_cp_age_insulin))
     }
 }

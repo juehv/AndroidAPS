@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.library)
+    id("kotlin-android")
     id("android-module-dependencies")
     id("test-module-dependencies")
     id("jacoco-module-dependencies")
@@ -7,15 +8,13 @@ plugins {
 
 android {
     namespace = "info.nightscout.comboctl"
-    sourceSets {
-        getByName("main") {
-            kotlin.directories.add("src/commonMain/kotlin")
-            kotlin.directories.add("src/androidMain/kotlin")
-            manifest.srcFile("src/androidMain/AndroidManifest.xml")
-        }
-        getByName("test") {
-            kotlin.directories.add("src/jvmTest/kotlin")
-        }
+    sourceSets.getByName("main") {
+        kotlin.srcDir("src/commonMain/kotlin")
+        kotlin.srcDir("src/androidMain/kotlin")
+        manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    }
+    sourceSets.getByName("test") {
+        kotlin.srcDir("src/jvmTest/kotlin")
     }
 }
 
@@ -27,7 +26,6 @@ dependencies {
     api(libs.androidx.core)
 
     testImplementation(kotlin("test"))
-    testImplementation(kotlin("test-junit5"))
     testImplementation(project(":shared:tests"))
 
     testImplementation(libs.io.kotlintest.runner.junit5)

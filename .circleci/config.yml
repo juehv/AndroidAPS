@@ -17,16 +17,17 @@ jobs:
       - checkout
 
       - run:
-          name: Compile all test sources
+          name: Run compileFullDebugAndroidTestSources
           command: |
             export ANDROID_SDK_ROOT=/usr/lib/android-sdk
             export ANDROID_HOME=/usr/lib/android-sdk
+            env
             ./gradlew \
             -Dorg.gradle.jvmargs="-Xmx8g -XX:+UseParallelGC -Xss1024m" \
-            -Dkotlin.daemon.jvm.options="-Xmx3g" \
+            -Dkotlin.daemon.jvm.options="-Xmx2g" \
+            -Dkotlin.compiler.execution.strategy="in-process" \
             -Dorg.gradle.daemon=true \
-            compileFullDebugAndroidTestSources \
-            compileFullDebugUnitTestSources
+            compileFullDebugAndroidTestSources
 
       - run:
           name: Create avd
@@ -46,20 +47,20 @@ jobs:
           command: |
             export ANDROID_SDK_ROOT=/usr/lib/android-sdk
             export ANDROID_HOME=/usr/lib/android-sdk
-            export JAVA_TOOL_OPTIONS="-Xmx6g"
+            env
             ./gradlew \
-            -Dorg.gradle.jvmargs="-Xmx8g -XX:+UseG1GC -XX:MaxMetaspaceSize=1g -Xss1024m" \
-            -Dkotlin.daemon.jvm.options="-Xmx3g" \
-            -Dorg.gradle.workers.max=4 \
+            -Dorg.gradle.jvmargs="-Xmx8g -XX:+UseParallelGC -Xss1024m" \
+            -Dkotlin.daemon.jvm.options="-Xmx2g" \
+            -Dkotlin.compiler.execution.strategy="in-process" \
             -Dorg.gradle.daemon=true \
             connectedFullDebugAndroidTest
-
+          
       - run:
           name: Kill emulators
           command: |
             echo "Killing emulators"
             adb devices | grep emulator | cut -f1 | while read -r line; do adb -s $line emu kill; done
-
+          
       - run:
           name: Run testFullDebugUnitTest
           command: |
@@ -67,13 +68,14 @@ jobs:
             export ANDROID_HOME=/usr/lib/android-sdk
             ./gradlew \
             -Dorg.gradle.jvmargs="-Xmx8g -XX:+UseParallelGC -Xss1024m" \
-            -Dkotlin.daemon.jvm.options="-Xmx3g" \
+            -Dkotlin.daemon.jvm.options="-Xmx2g" \
+            -Dkotlin.compiler.execution.strategy="in-process" \
             -Dorg.gradle.workers.max=22 \
             -Dorg.gradle.daemon=true \
             testFullDebugUnitTest
 
       - run:
-          name: Run jacocoAllDebugReport
+          run: Run jacocoAllDebugReport
           command: |
             export ANDROID_SDK_ROOT=/usr/lib/android-sdk
             export ANDROID_HOME=/usr/lib/android-sdk

@@ -5,7 +5,6 @@ import app.aaps.database.daos.CarbsDao
 import app.aaps.database.entities.Carbs
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `invalidates valid carbs`() = runTest {
+    fun `invalidates valid carbs`() {
         val carbs = createCarbs(id = 1, isValid = true, amount = 50.0)
 
         whenever(carbsDao.findById(1)).thenReturn(carbs)
@@ -44,7 +43,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `does not update already invalid carbs`() = runTest {
+    fun `does not update already invalid carbs`() {
         val carbs = createCarbs(id = 1, isValid = false, amount = 50.0)
 
         whenever(carbsDao.findById(1)).thenReturn(carbs)
@@ -60,7 +59,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `throws exception when carbs not found`() = runTest {
+    fun `throws exception when carbs not found`() {
         whenever(carbsDao.findById(999)).thenReturn(null)
 
         val transaction = InvalidateCarbsTransaction(id = 999)
@@ -75,7 +74,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `transaction result has correct structure`() = runTest {
+    fun `transaction result has correct structure`() {
         val result = InvalidateCarbsTransaction.TransactionResult()
 
         assertThat(result.invalidated).isEmpty()
@@ -83,7 +82,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `preserves carbs amount and timestamp when invalidating`() = runTest {
+    fun `preserves carbs amount and timestamp when invalidating`() {
         val amount = 75.0
         val timestamp = 123456789L
         val carbs = createCarbs(id = 1, isValid = true, amount = amount, timestamp = timestamp)
@@ -100,7 +99,7 @@ class InvalidateCarbsTransactionTest {
     }
 
     @Test
-    fun `invalidates extended carbs with duration`() = runTest {
+    fun `invalidates extended carbs with duration`() {
         val carbs = createCarbs(id = 1, isValid = true, amount = 50.0, duration = 120_000L)
 
         whenever(carbsDao.findById(1)).thenReturn(carbs)

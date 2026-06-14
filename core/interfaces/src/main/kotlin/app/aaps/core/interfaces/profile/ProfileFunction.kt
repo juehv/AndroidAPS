@@ -1,7 +1,6 @@
 package app.aaps.core.interfaces.profile
 
 import app.aaps.core.data.model.GlucoseUnit
-import app.aaps.core.data.model.ICfg
 import app.aaps.core.data.model.PS
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
@@ -12,22 +11,22 @@ interface ProfileFunction {
     /**
      * Profile name with added modifiers
      */
-    suspend fun getProfileName(): String
+    fun getProfileName(): String
 
     /**
      * Profile name without any modifiers
      */
-    suspend fun getOriginalProfileName(): String
+    fun getOriginalProfileName(): String
 
     /**
      * Profile name with added modifiers and remaining time
      */
-    suspend fun getProfileNameWithRemainingTime(): String
+    fun getProfileNameWithRemainingTime(): String
 
     /**
      * Check if there is actual profile existing
      */
-    suspend fun isProfileValid(from: String): Boolean
+    fun isProfileValid(from: String): Boolean
 
     /**
      * User preferences unit set in preferences
@@ -37,26 +36,26 @@ interface ProfileFunction {
     /**
      * Get effective (active) profile confirmed by pump for "now"
      */
-    suspend fun getProfile(): EffectiveProfile?
+    fun getProfile(): Profile?
 
     /**
      * Get effective (active) profile confirmed by pump for time
      */
-    suspend fun getProfile(time: Long): EffectiveProfile?
+    fun getProfile(time: Long): Profile?
 
     /**
      * Get requested profile by user (profile must not be active yet)
      *
      * @return ProfileSwitch if exists
      */
-    suspend fun getRequestedProfile(): PS?
+    fun getRequestedProfile(): PS?
 
     /**
      * Get requested profile by user (profile must not be active yet)
      *
      * @return true if ProfileSwitch != EffectiveProfileSwitch
      */
-    suspend fun isProfileChangePending(): Boolean
+    fun isProfileChangePending(): Boolean
 
     /**
      * Build a new circadian profile switch request based on provided profile
@@ -69,7 +68,7 @@ interface ProfileFunction {
      * @param timestamp         expected time
      * @return null if profile cannot be created from profile store
      */
-    fun buildProfileSwitch(profileStore: ProfileStore, profileName: String, durationInMinutes: Int, percentage: Int, timeShiftInHours: Int, timestamp: Long, iCfg: ICfg): PS?
+    fun buildProfileSwitch(profileStore: ProfileStore, profileName: String, durationInMinutes: Int, percentage: Int, timeShiftInHours: Int, timestamp: Long): PS?
 
     /**
      * Create a new circadian profile switch request based on provided profile
@@ -86,10 +85,10 @@ interface ProfileFunction {
      * @param listValues Values for UserEntry logging
      * @return true if profile was created from store
      */
-    suspend fun createProfileSwitch(
+    fun createProfileSwitch(
         profileStore: ProfileStore, profileName: String, durationInMinutes: Int, percentage: Int, timeShiftInHours: Int, timestamp: Long,
-        action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>, iCfg: ICfg
-    ): PS?
+        action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>
+    ): Boolean
 
     /**
      * Create a new circadian profile switch request based on currently selected profile interface and default profile
@@ -103,18 +102,8 @@ interface ProfileFunction {
      * @param listValues Values for UserEntry logging
      * @return true if profile switch is created
      */
-    suspend fun createProfileSwitch(
+    fun createProfileSwitch(
         durationInMinutes: Int, percentage: Int, timeShiftInHours: Int,
         action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>
-    ): PS?
-
-    /**
-     * Re-apply the currently active profile switch with a different insulin configuration.
-     * Preserves the original profile name, percentage, timeshift, and remaining duration.
-     *
-     * @param iCfg new insulin configuration to apply
-     * @param source Source for UserEntry logging
-     * @return true if profile switch was created
-     */
-    suspend fun createProfileSwitchWithNewInsulin(iCfg: ICfg, source: Sources): Boolean
+    ): Boolean
 }

@@ -7,5 +7,4 @@ class ActiveBolus {
     var initialAmount = 0.0
     var remainingAmount = 0.0
     var remainingDuration = 0
-    var startTime = 0L
 }

@@ -9,27 +9,40 @@ import app.aaps.core.interfaces.pump.PumpEnactResult
 import app.aaps.core.interfaces.queue.Callback
 import app.aaps.core.interfaces.queue.Command
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventDismissBolusProgressIfRunning
+import dagger.android.HasAndroidInjector
+import javax.inject.Inject
 import javax.inject.Provider
 
 class CommandBolus(
-    private val aapsLogger: AAPSLogger,
-    private val rh: ResourceHelper,
-    private val activePlugin: ActivePlugin,
-    override val pumpEnactResultProvider: Provider<PumpEnactResult>,
-    private val bolusProgressData: BolusProgressData,
+    injector: HasAndroidInjector,
     private val detailedBolusInfo: DetailedBolusInfo,
     override val callback: Callback?,
     type: Command.CommandType,
+    private val carbsRunnable: Runnable
 ) : Command {
 
-    override var commandType: Command.CommandType = type
+    @Inject lateinit var aapsLogger: AAPSLogger
+    @Inject lateinit var rh: ResourceHelper
+    @Inject lateinit var rxBus: RxBus
+    @Inject lateinit var activePlugin: ActivePlugin
+    @Inject lateinit var pumpEnactResultProvider: Provider<PumpEnactResult>
 
-    override suspend fun execute(): PumpEnactResult {
+    override var commandType: Command.CommandType
+
+    init {
+        injector.androidInjector().inject(this)
+        this.commandType = type
+    }
+
+    override fun execute() {
         val r = activePlugin.activePump.deliverTreatment(detailedBolusInfo)
+        if (r.success) carbsRunnable.run()
+        BolusProgressData.bolusEnded = true
+        rxBus.send(EventDismissBolusProgressIfRunning(r.success, detailedBolusInfo.id))
         aapsLogger.debug(LTag.PUMPQUEUE, "Result success: ${r.success} enacted: ${r.enacted}")
-        if (r.success) bolusProgressData.completeAndAutoClear()
-        else bolusProgressData.clear()
-        return r
+        callback?.result(r)?.run()
     }
 
     override fun status(): String {
@@ -39,11 +52,11 @@ class CommandBolus(
 
     override fun log(): String {
         return (if (detailedBolusInfo.insulin > 0) "BOLUS " + rh.gs(app.aaps.core.ui.R.string.format_insulin_units, detailedBolusInfo.insulin) else "") +
-            if (detailedBolusInfo.carbs > 0) "CARBS " + rh.gs(app.aaps.core.ui.R.string.format_carbs, detailedBolusInfo.carbs.toInt()) else ""
+            if (detailedBolusInfo.carbs > 0) "CARBS " + rh.gs(app.aaps.core.objects.R.string.format_carbs, detailedBolusInfo.carbs.toInt()) else ""
     }
 
-    override fun cancel(commentResId: Int, success: Boolean) {
-        super.cancel(commentResId, success)
-        bolusProgressData.clear()
+    override fun cancel() {
+        aapsLogger.debug(LTag.PUMPQUEUE, "Result cancel")
+        callback?.result(pumpEnactResultProvider.get().success(false).comment(app.aaps.core.ui.R.string.connectiontimedout))?.run()
     }
 }

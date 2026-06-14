@@ -1,7 +1,8 @@
 package app.aaps.pump.danarkorean.comm
 
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationId
+import app.aaps.core.interfaces.notifications.Notification
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
 import app.aaps.pump.danar.comm.MessageBase
 import dagger.android.HasAndroidInjector
 
@@ -29,9 +30,9 @@ class MsgInitConnStatusBolusK(
         aapsLogger.debug(LTag.PUMPCOMM, "Bolus max: " + danaPump.maxBolus)
         aapsLogger.debug(LTag.PUMPCOMM, "Delivery status: $deliveryStatus")
         if (!danaPump.isExtendedBolusEnabled) {
-            notificationManager.post(NotificationId.EXTENDED_BOLUS_DISABLED, app.aaps.pump.dana.R.string.danar_enableextendedbolus)
+            uiInteraction.addNotification(Notification.EXTENDED_BOLUS_DISABLED, rh.gs(app.aaps.pump.dana.R.string.danar_enableextendedbolus), Notification.URGENT)
         } else {
-            notificationManager.dismiss(NotificationId.EXTENDED_BOLUS_DISABLED)
+            rxBus.send(EventDismissNotification(Notification.EXTENDED_BOLUS_DISABLED))
         }
         // This is last message of initial sequence
         activePlugin.activePump.finishHandshaking()

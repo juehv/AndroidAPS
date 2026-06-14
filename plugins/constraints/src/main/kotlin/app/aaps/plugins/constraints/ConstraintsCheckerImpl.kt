@@ -29,9 +29,9 @@ class ConstraintsCheckerImpl @Inject constructor(
         return value
     }
 
-    override suspend fun isClosedLoopAllowed(): Constraint<Boolean> = isClosedLoopAllowed(ConstraintObject(true, aapsLogger))
+    override fun isClosedLoopAllowed(): Constraint<Boolean> = isClosedLoopAllowed(ConstraintObject(true, aapsLogger))
 
-    override suspend fun isClosedLoopAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
+    override fun isClosedLoopAllowed(value: Constraint<Boolean>): Constraint<Boolean> {
         val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
         for (p in constraintsPlugins) {
             val constraint = p as PluginConstraints
@@ -65,9 +65,9 @@ class ConstraintsCheckerImpl @Inject constructor(
         return value
     }
 
-    override suspend fun isSMBModeEnabled(): Constraint<Boolean> = isSMBModeEnabled(ConstraintObject(true, aapsLogger))
+    override fun isSMBModeEnabled(): Constraint<Boolean> = isSMBModeEnabled(ConstraintObject(true, aapsLogger))
 
-    override suspend fun isSMBModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+    override fun isSMBModeEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
         val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
         for (p in constraintsPlugins) {
             val constraint = p as PluginConstraints
@@ -89,9 +89,9 @@ class ConstraintsCheckerImpl @Inject constructor(
         return value
     }
 
-    override suspend fun isAdvancedFilteringEnabled(): Constraint<Boolean> = isAdvancedFilteringEnabled(ConstraintObject(true, aapsLogger))
+    override fun isAdvancedFilteringEnabled(): Constraint<Boolean> = isAdvancedFilteringEnabled(ConstraintObject(true, aapsLogger))
 
-    override suspend fun isAdvancedFilteringEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
+    override fun isAdvancedFilteringEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
         val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
         for (p in constraintsPlugins) {
             val constraint = p as PluginConstraints
@@ -114,8 +114,6 @@ class ConstraintsCheckerImpl @Inject constructor(
     }
 
     override fun isAutomationEnabled(): Constraint<Boolean> = isAutomationEnabled(ConstraintObject(true, aapsLogger))
-
-    override fun isConcentrationEnabled(): Constraint<Boolean> = isConcentrationEnabled(ConstraintObject(true, aapsLogger))
 
     override fun applyBasalConstraints(absoluteRate: Constraint<Double>, profile: Profile): Constraint<Double> {
         val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
@@ -167,7 +165,7 @@ class ConstraintsCheckerImpl @Inject constructor(
         return carbs
     }
 
-    override suspend fun applyMaxIOBConstraints(maxIob: Constraint<Double>): Constraint<Double> {
+    override fun applyMaxIOBConstraints(maxIob: Constraint<Double>): Constraint<Double> {
         val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
         for (p in constraintsPlugins) {
             val constrain = p as PluginConstraints
@@ -183,16 +181,6 @@ class ConstraintsCheckerImpl @Inject constructor(
             val constraint = p as PluginConstraints
             if (!p.isEnabled()) continue
             constraint.isAutomationEnabled(value)
-        }
-        return value
-    }
-
-    override fun isConcentrationEnabled(value: Constraint<Boolean>): Constraint<Boolean> {
-        val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class.java)
-        for (p in constraintsPlugins) {
-            val constraint = p as PluginConstraints
-            if (!p.isEnabled()) continue
-            constraint.isConcentrationEnabled(value)
         }
         return value
     }
@@ -216,6 +204,6 @@ class ConstraintsCheckerImpl @Inject constructor(
     override fun getMaxCarbsAllowed(): Constraint<Int> =
         applyCarbsConstraints(ConstraintObject(HardLimits.MAX_CARBS, aapsLogger))
 
-    override suspend fun getMaxIOBAllowed(): Constraint<Double> =
+    override fun getMaxIOBAllowed(): Constraint<Double> =
         applyMaxIOBConstraints(ConstraintObject(Double.MAX_VALUE, aapsLogger))
 }

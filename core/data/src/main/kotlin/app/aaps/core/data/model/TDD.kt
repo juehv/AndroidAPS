@@ -9,14 +9,13 @@ data class TDD(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     var basalAmount: Double = 0.0,
     var bolusAmount: Double = 0.0,
     var totalAmount: Double = 0.0, // if zero it's calculated as basalAmount + bolusAmount
-    var carbs: Double = 0.0,
-    var carbInsulin: Double = 0.0 // estimated insulin for carbs = sum(carbs / IC at carb time)
-) : HasIDs, TimeStamped {
+    var carbs: Double = 0.0
+) : HasIDs {
 
     companion object
 }

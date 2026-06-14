@@ -5,7 +5,7 @@ import app.aaps.database.entities.Bolus
 class UpdateNsIdBolusTransaction(private val boluses: List<Bolus>) : Transaction<UpdateNsIdBolusTransaction.TransactionResult>() {
 
     val result = TransactionResult()
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         for (bolus in boluses) {
             val current = database.bolusDao.findById(bolus.id)
             if (current != null && current.interfaceIDs.nightscoutId != bolus.interfaceIDs.nightscoutId) {

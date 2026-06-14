@@ -1,15 +1,18 @@
 package app.aaps.plugins.automation.triggers
 
+import android.widget.LinearLayout
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.objects.profile.ProfileSealed
-import app.aaps.core.ui.compose.icons.IcProfile
 import app.aaps.core.utils.JsonHelper
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.Comparator
 import app.aaps.plugins.automation.elements.InputPercent
+import app.aaps.plugins.automation.elements.LabelWithElement
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
+import java.util.Optional
 import kotlin.math.roundToInt
 
 class TriggerProfilePercent(injector: HasAndroidInjector) : Trigger(injector) {
@@ -37,7 +40,7 @@ class TriggerProfilePercent(injector: HasAndroidInjector) : Trigger(injector) {
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
+    override fun shouldRun(): Boolean {
         val profile = profileFunction.getProfile()
         if (profileFunction.isProfileChangePending()) {
             aapsLogger.debug(LTag.AUTOMATION, "NOT ready for execution: " + "Profile change is already pending: " + friendlyDescription())
@@ -53,6 +56,12 @@ class TriggerProfilePercent(injector: HasAndroidInjector) : Trigger(injector) {
         }
         if (profile is ProfileSealed.EPS) {
             if (comparator.value.check(profile.value.originalPercentage, pct.value.roundToInt())) {
+                aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
+                return true
+            }
+        }
+        if (profile is ProfileSealed.Pure) {
+            if (comparator.value.check(100, pct.value.roundToInt())) {
                 aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
                 return true
             }
@@ -78,9 +87,15 @@ class TriggerProfilePercent(injector: HasAndroidInjector) : Trigger(injector) {
     override fun friendlyDescription(): String =
         rh.gs(R.string.percentagecompared, rh.gs(comparator.value.stringRes), pct.value.toInt())
 
-    override fun composeIcon() = IcProfile
-    override fun composeIconTint() = IconTint.Profile
+    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.ui.R.drawable.ic_actions_profileswitch)
 
     override fun duplicate(): Trigger = TriggerProfilePercent(injector, this)
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, R.string.profilepercentage, this))
+            .add(comparator)
+            .add(LabelWithElement(rh, rh.gs(R.string.percent_u), "", pct))
+            .build(root)
+    }
 }

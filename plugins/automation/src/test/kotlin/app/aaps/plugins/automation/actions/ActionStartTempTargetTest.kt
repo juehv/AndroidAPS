@@ -4,11 +4,12 @@ import app.aaps.core.data.model.GlucoseUnit
 import app.aaps.core.data.model.IDs
 import app.aaps.core.data.model.TT
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.plugins.automation.R
 import app.aaps.plugins.automation.elements.InputDuration
 import app.aaps.plugins.automation.elements.InputTempTarget
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.anyOrNull
@@ -40,7 +41,11 @@ class ActionStartTempTargetTest : ActionsTestBase() {
         assertThat(sut.shortDescription()).isEqualTo("Start temp target: 100mg/dl@null(Automation)")
     }
 
-    @Test fun doActionTest() = runTest {
+    @Test fun iconTest() {
+        assertThat(sut.icon()).isEqualTo(app.aaps.core.objects.R.drawable.ic_temptarget_high_24dp)
+    }
+
+    @Test fun doActionTest() {
 
         val expectedTarget = TT(
             id = 0,
@@ -69,13 +74,16 @@ class ActionStartTempTargetTest : ActionsTestBase() {
                 copy(timestamp = expectedTarget.timestamp, utcOffset = expectedTarget.utcOffset) // those can be different
                     .contentEqualsTo(expectedTarget)
             }, anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
-        ).thenReturn(PersistenceLayer.TransactionResult<TT>().apply {
+        ).thenReturn(Single.just(PersistenceLayer.TransactionResult<TT>().apply {
             inserted.addAll(inserted)
             updated.addAll(updated)
-        })
+        }))
 
-        val result = sut.doAction()
-        assertThat(result.success).isTrue()
+        sut.doAction(object : Callback() {
+            override fun run() {
+                assertThat(result.success).isTrue()
+            }
+        })
         verify(persistenceLayer, times(1)).insertAndCancelCurrentTemporaryTarget(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
     }
 

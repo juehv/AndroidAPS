@@ -4,7 +4,6 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.profile.Profile
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.utils.notifyAll
 import app.aaps.pump.equil.database.EquilHistoryRecord
 import app.aaps.pump.equil.driver.definition.BasalSchedule
 import app.aaps.pump.equil.keys.EquilBooleanKey
@@ -22,7 +21,7 @@ class CmdBasalSet(
     override fun getFirstData(): ByteArray {
         val indexByte = Utils.intToBytes(pumpReqIndex)
         val data2 = byteArrayOf(0x01, 0x02)
-        val list: MutableList<Byte?> = ArrayList()
+        val list: MutableList<Byte?> = ArrayList<Byte?>()
         var i = 0
         for (basalScheduleEntry in basalSchedule.getEntries()) {
             val rate = basalScheduleEntry.rate
@@ -57,11 +56,11 @@ class CmdBasalSet(
         synchronized(this) {
             preferences.put(EquilBooleanKey.BasalSet, true)
             cmdSuccess = true
-            notifyAll()
+            (this as Object).notifyAll()
         }
     }
 
-    override fun getEventType(): EquilHistoryRecord.EventType {
+    override fun getEventType(): EquilHistoryRecord.EventType? {
         return EquilHistoryRecord.EventType.SET_BASAL_PROFILE
     }
 }

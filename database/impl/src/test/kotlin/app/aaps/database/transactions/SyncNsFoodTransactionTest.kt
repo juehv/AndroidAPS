@@ -5,7 +5,6 @@ import app.aaps.database.daos.FoodDao
 import app.aaps.database.entities.Food
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class SyncNsFoodTransactionTest {
     }
 
     @Test
-    fun `inserts new food when nsId not found`() = runTest {
+    fun `inserts new food when nsId not found`() {
         val food = createFood(id = 0, nsId = "ns-123", name = "Apple", carbs = 15)
 
         whenever(foodDao.findByNSId("ns-123")).thenReturn(null)
@@ -45,7 +44,7 @@ class SyncNsFoodTransactionTest {
     }
 
     @Test
-    fun `updates food when content changes`() = runTest {
+    fun `updates food when content changes`() {
         val food = createFood(id = 0, nsId = "ns-123", name = "Apple", carbs = 20)
         val existing = createFood(id = 1, nsId = "ns-123", name = "Apple", carbs = 15)
 
@@ -65,7 +64,7 @@ class SyncNsFoodTransactionTest {
     }
 
     @Test
-    fun `invalidates food when valid becomes invalid`() = runTest {
+    fun `invalidates food when valid becomes invalid`() {
         val food = createFood(id = 0, nsId = "ns-123", name = "Apple", carbs = 15, isValid = false)
         val existing = createFood(id = 1, nsId = "ns-123", name = "Apple", carbs = 15, isValid = true)
 
@@ -84,7 +83,7 @@ class SyncNsFoodTransactionTest {
     }
 
     @Test
-    fun `does not update when content is same`() = runTest {
+    fun `does not update when content is same`() {
         val food = createFood(id = 0, nsId = "ns-123", name = "Apple", carbs = 15)
         val existing = createFood(id = 1, nsId = "ns-123", name = "Apple", carbs = 15)
 
@@ -103,7 +102,7 @@ class SyncNsFoodTransactionTest {
     }
 
     @Test
-    fun `handles multiple foods`() = runTest {
+    fun `handles multiple foods`() {
         val food1 = createFood(id = 0, nsId = "ns-1", name = "Apple", carbs = 15)
         val food2 = createFood(id = 0, nsId = "ns-2", name = "Banana", carbs = 25)
 

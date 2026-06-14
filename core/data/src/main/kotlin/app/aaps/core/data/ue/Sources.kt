@@ -12,7 +12,6 @@ enum class Sources {
     LoopDialog,
     TempBasalDialog,
     CalibrationDialog,
-    ConcentrationDialog,
     FillDialog,
     SiteRotationDialog,
     BgCheck,
@@ -38,13 +37,10 @@ enum class Sources {
     Glunovo,
     Intelligo,
     Xdrip,
-    Insulin,            //From Insulin plugin
     Ottai,              //From Ottai Plugin
     SyaiTag,
     SiBionic,
     Sino,
-    Instara,            // From Instara Plugin
-    NotificationReader,
     LocalProfile,       //From LocalProfile plugin
     Loop,               //From Loop plugin
     Maintenance,        //From Maintenance plugin
@@ -72,7 +68,6 @@ enum class Sources {
     VirtualPump,
     Random,
     SMS,                //From SMS plugin
-    NfcCommands,        //From NFC Commands plugin
     Treatments,         //From Treatments plugin
     Wear,               //From Wear plugin
     Food,               //From Food plugin
@@ -82,7 +77,6 @@ enum class Sources {
     Aaps,               // MainApp
     BgFragment,
     Garmin,
-    Scene,              //From Scene activation
     Database,           // for PersistenceLayer
     Unknown             //if necessary
     ;

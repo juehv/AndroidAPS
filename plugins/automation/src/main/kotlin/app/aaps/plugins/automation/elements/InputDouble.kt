@@ -1,14 +1,18 @@
 package app.aaps.plugins.automation.elements
 
+import android.view.Gravity
+import android.widget.LinearLayout
+import app.aaps.core.ui.elements.NumberPicker
 import java.text.DecimalFormat
 
-class InputDouble() {
+class InputDouble() : Element {
 
     var value = 0.0
     private var minValue = 0.0
     private var maxValue = 0.0
     private var step = 0.0
     private var decimalFormat: DecimalFormat? = null
+    private var numberPicker: NumberPicker? = null
 
     constructor(value: Double, minValue: Double, maxValue: Double, step: Double, decimalFormat: DecimalFormat) : this() {
         this.value = value
@@ -26,8 +30,18 @@ class InputDouble() {
         this.decimalFormat = inputDouble.decimalFormat
     }
 
+    override fun addToLayout(root: LinearLayout) {
+        numberPicker = NumberPicker(root.context, null).also {
+            it.setParams(value, minValue, maxValue, step, decimalFormat, true, root.findViewById(app.aaps.core.ui.R.id.ok))
+            it.setOnValueChangedListener { v: Double -> value = v }
+            it.gravity = Gravity.CENTER_HORIZONTAL
+        }
+        root.addView(numberPicker)
+    }
+
     fun setValue(value: Double): InputDouble {
         this.value = value
+        numberPicker?.value = value
         return this
     }
 }

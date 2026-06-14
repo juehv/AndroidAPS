@@ -14,20 +14,19 @@ import app.aaps.core.data.model.NE
 import app.aaps.core.data.model.PS
 import app.aaps.core.data.model.RM
 import app.aaps.core.data.model.SC
-import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TB
 import app.aaps.core.data.model.TDD
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.model.TT
 import app.aaps.core.data.model.UE
-import app.aaps.core.data.model.advancedFilteringSupported
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.data.ue.ValueWithUnit
 import app.aaps.core.interfaces.aps.APSResult
-import kotlinx.coroutines.flow.Flow
-import kotlin.reflect.KClass
+import io.reactivex.rxjava3.core.Completable
+import io.reactivex.rxjava3.core.Maybe
+import io.reactivex.rxjava3.core.Single
 
 interface PersistenceLayer {
 
@@ -46,34 +45,7 @@ interface PersistenceLayer {
      * @param keepDays remove all records older than
      * @param deleteTrackedChanges delete tracked changes from all tables
      */
-    suspend fun cleanupDatabase(keepDays: Long, deleteTrackedChanges: Boolean): String
-
-    /**
-     * Full VACUUM of the database: defragments the file and returns free pages to the OS.
-     * Heavy and memory intensive — only call when nothing else is using the DB (e.g. on startup
-     * before plugins/loop/sync start). May throw if the DB is busy/locked.
-     */
-    suspend fun vacuumDatabase()
-
-    // Flow-based change observation
-    /**
-     * Observe changes for a specific domain type
-     * @param T The domain type to observe (BS, CA, EB, TB, TT, TE, PS, EPS, etc.)
-     * @return Flow that emits list of changed entities of type T
-     */
-    fun <T : Any> observeChanges(type: Class<T>): Flow<List<T>>
-
-    /**
-     * Observe all database changes, emitting the set of domain types that changed in each transaction
-     * @return Flow that emits set of changed domain type KClasses (e.g. {BS::class, CA::class})
-     */
-    fun observeAnyChange(): Flow<Set<KClass<*>>>
-
-    /**
-     * Emits Unit once whenever all tables are wiped (clearDatabases).
-     * Observers that cache DB-derived state (e.g. status lights) should subscribe and refresh.
-     */
-    val databaseClearedFlow: Flow<Unit>
+    fun cleanupDatabase(keepDays: Long, deleteTrackedChanges: Boolean): String
 
     // BS
     /**
@@ -81,14 +53,14 @@ interface PersistenceLayer {
      *
      * @return bolus record
      */
-    suspend fun getNewestBolus(): BS?
+    fun getNewestBolus(): BS?
 
     /**
      * Get oldest bolus
      *
      * @return bolus record
      */
-    suspend fun getOldestBolus(): BS?
+    fun getOldestBolus(): BS?
 
     /**
      * Get last bolus of specified type
@@ -96,35 +68,28 @@ interface PersistenceLayer {
      * @param type bolus type
      * @return bolus record
      */
-    suspend fun getNewestBolusOfType(type: BS.Type): BS?
+    fun getNewestBolusOfType(type: BS.Type): BS?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastBolusId(): Long?
+    fun getLastBolusId(): Long?
 
     /**
      *  Get bolus by NS id
      *  @return bolus
      */
-    suspend fun getBolusByNSId(nsId: String): BS?
+    fun getBolusByNSId(nsId: String): BS?
 
     /**
-     * Get all boluses
-     *
-     * @return List of all boluses
-     */
-    suspend fun getBoluses(): List<BS>
-
-    /**
-     * Get boluses from time (suspend variant)
+     * Get boluses from time
      *
      * @param startTime from
      * @param ascending sort order
      * @return List of boluses
      */
-    suspend fun getBolusesFromTime(startTime: Long, ascending: Boolean): List<BS>
+    fun getBolusesFromTime(startTime: Long, ascending: Boolean): Single<List<BS>>
 
     /**
      * Get boluses in time interval
@@ -134,16 +99,16 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of boluses
      */
-    suspend fun getBolusesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<BS>
+    fun getBolusesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<BS>
 
     /**
-     * Get boluses from time including invalidated (suspend variant)
+     * Get boluses from time including invalidated
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of boluses including invalidated ones
+     * @return List of boluses
      */
-    suspend fun getBolusesFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): List<BS>
+    fun getBolusesFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): Single<List<BS>>
 
     /**
      * Get next changed record after id
@@ -151,7 +116,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementBolus(id: Long): Pair<BS, BS>?
+    fun getNextSyncElementBolus(id: Long): Maybe<Pair<BS, BS>>
 
     /**
      * Insert or update if exists record
@@ -162,7 +127,7 @@ interface PersistenceLayer {
      * @param source Source for UserEntry logging
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateBolus(bolus: BS, action: Action, source: Sources, note: String? = null): TransactionResult<BS>
+    fun insertOrUpdateBolus(bolus: BS, action: Action, source: Sources, note: String? = null): Single<TransactionResult<BS>>
 
     /**
      * Insert record
@@ -170,7 +135,7 @@ interface PersistenceLayer {
      * @param bolus record
      * @return List of inserted records
      */
-    suspend fun insertBolusWithTempId(bolus: BS): TransactionResult<BS>
+    fun insertBolusWithTempId(bolus: BS): Single<TransactionResult<BS>>
 
     /**
      * Invalidate record with id
@@ -182,7 +147,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateBolus(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<BS>
+    fun invalidateBolus(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<BS>>
 
     /**
      * Sync record coming from pump to database
@@ -191,7 +156,7 @@ interface PersistenceLayer {
      * @param type record type because filed is not nullable in class
      * @return List of inserted/updated records
      */
-    suspend fun syncPumpBolus(bolus: BS, type: BS.Type?): TransactionResult<BS>
+    fun syncPumpBolus(bolus: BS, type: BS.Type?): Single<TransactionResult<BS>>
 
     /**
      * Sync record coming from pump to database based on pump temporary id
@@ -200,7 +165,7 @@ interface PersistenceLayer {
      * @param type record type because filed is not nullable in class
      * @return List of updated records
      */
-    suspend fun syncPumpBolusWithTempId(bolus: BS, type: BS.Type?): TransactionResult<BS>
+    fun syncPumpBolusWithTempId(bolus: BS, type: BS.Type?): Single<TransactionResult<BS>>
 
     /**
      * Store records coming from NS to database
@@ -209,7 +174,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsBolus(boluses: List<BS>, doLog: Boolean): TransactionResult<BS>
+    fun syncNsBolus(boluses: List<BS>, doLog: Boolean): Single<TransactionResult<BS>>
 
     /**
      * Update NS id' in database
@@ -217,50 +182,50 @@ interface PersistenceLayer {
      * @param boluses records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateBolusesNsIds(boluses: List<BS>): TransactionResult<BS>
+    fun updateBolusesNsIds(boluses: List<BS>): Single<TransactionResult<BS>>
 
     // CA
     /**
      *  Get carbs record with highest timestamp
      *  @return carbs
      */
-    suspend fun getNewestCarbs(): CA?
+    fun getNewestCarbs(): CA?
 
     /**
      *  Get carbs record with lowest timestamp
      *  @return carbs
      */
-    suspend fun getOldestCarbs(): CA?
+    fun getOldestCarbs(): CA?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastCarbsId(): Long?
+    fun getLastCarbsId(): Long?
 
     /**
      *  Get carbs by NS id
      *  @return carbs
      */
-    suspend fun getCarbsByNSId(nsId: String): CA?
+    fun getCarbsByNSId(nsId: String): CA?
 
     /**
-     * Get carbs from time (suspend variant)
+     * Get carbs from time
      *
      * @param startTime from
      * @param ascending sort order
      * @return List of carbs
      */
-    suspend fun getCarbsFromTime(startTime: Long, ascending: Boolean): List<CA>
+    fun getCarbsFromTime(startTime: Long, ascending: Boolean): Single<List<CA>>
 
     /**
-     * Get carbs from time including invalidated (suspend variant)
+     * Get carbs from time including invalidated
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of carbs including invalidated ones
+     * @return List of boluses
      */
-    suspend fun getCarbsFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): List<CA>
+    fun getCarbsFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): Single<List<CA>>
 
     /**
      * Get carbs from time with expanded extended carbs to multiple records
@@ -269,7 +234,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of carbs
      */
-    suspend fun getCarbsFromTimeExpanded(startTime: Long, ascending: Boolean): List<CA>
+    fun getCarbsFromTimeExpanded(startTime: Long, ascending: Boolean): List<CA>
 
     /**
      * Get carbs records from time
@@ -278,7 +243,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of carbs
      */
-    suspend fun getCarbsFromTimeNotExpanded(startTime: Long, ascending: Boolean): List<CA>
+    fun getCarbsFromTimeNotExpanded(startTime: Long, ascending: Boolean): Single<List<CA>>
 
     /**
      * Get carbs in time interval with expanded extended carbs to multiple records
@@ -288,7 +253,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of carbs
      */
-    suspend fun getCarbsFromTimeToTimeExpanded(startTime: Long, endTime: Long, ascending: Boolean): List<CA>
+    fun getCarbsFromTimeToTimeExpanded(startTime: Long, endTime: Long, ascending: Boolean): List<CA>
 
     /**
      * Get next changed record after id
@@ -296,7 +261,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementCarbs(id: Long): Pair<CA, CA>?
+    fun getNextSyncElementCarbs(id: Long): Maybe<Pair<CA, CA>>
 
     /**
      * Insert or update if exists record
@@ -307,7 +272,7 @@ interface PersistenceLayer {
      * @param source Source for UserEntry logging
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateCarbs(carbs: CA, action: Action, source: Sources, note: String? = null): TransactionResult<CA>
+    fun insertOrUpdateCarbs(carbs: CA, action: Action, source: Sources, note: String? = null): Single<TransactionResult<CA>>
 
     /**
      * Insert carbs if not exists
@@ -315,7 +280,7 @@ interface PersistenceLayer {
      * @param carbs record
      * @return List of inserted records
      */
-    suspend fun insertPumpCarbsIfNewByTimestamp(carbs: CA): TransactionResult<CA>
+    fun insertPumpCarbsIfNewByTimestamp(carbs: CA): Single<TransactionResult<CA>>
 
     /**
      * Invalidate record with id
@@ -327,7 +292,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateCarbs(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<CA>
+    fun invalidateCarbs(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<CA>>
 
     /**
      * Invalidate record with id
@@ -335,7 +300,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return List of changed records
      */
-    suspend fun cutCarbs(id: Long, timestamp: Long): TransactionResult<CA>
+    fun cutCarbs(id: Long, timestamp: Long): Single<TransactionResult<CA>>
 
     /**
      * Store records coming from NS to database
@@ -344,7 +309,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsCarbs(carbs: List<CA>, doLog: Boolean): TransactionResult<CA>
+    fun syncNsCarbs(carbs: List<CA>, doLog: Boolean): Single<TransactionResult<CA>>
 
     /**
      * Update NS id' in database
@@ -352,32 +317,32 @@ interface PersistenceLayer {
      * @param carbs records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateCarbsNsIds(carbs: List<CA>): TransactionResult<CA>
+    fun updateCarbsNsIds(carbs: List<CA>): Single<TransactionResult<CA>>
 
     // BCR
     /**
      *  Get bolus calculator result by NS id
      *  @return bolus calculator result
      */
-    suspend fun getBolusCalculatorResultByNSId(nsId: String): BCR?
+    fun getBolusCalculatorResultByNSId(nsId: String): BCR?
 
     /**
      * Get BCRs starting from time
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of BCRs
+     * @return List of BCRs as Single
      */
-    suspend fun getBolusCalculatorResultsFromTime(startTime: Long, ascending: Boolean): List<BCR>
+    fun getBolusCalculatorResultsFromTime(startTime: Long, ascending: Boolean): Single<List<BCR>>
 
     /**
      * Get BCRs starting from time including invalided records
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of BCRs
+     * @return List of BCRs as Single
      */
-    suspend fun getBolusCalculatorResultsIncludingInvalidFromTime(startTime: Long, ascending: Boolean): List<BCR>
+    fun getBolusCalculatorResultsIncludingInvalidFromTime(startTime: Long, ascending: Boolean): Single<List<BCR>>
 
     /**
      * Get next changed record after id
@@ -385,14 +350,14 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementBolusCalculatorResult(id: Long): Pair<BCR, BCR>?
+    fun getNextSyncElementBolusCalculatorResult(id: Long): Maybe<Pair<BCR, BCR>>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastBolusCalculatorResultId(): Long?
+    fun getLastBolusCalculatorResultId(): Long?
 
     /**
      * Insert or update if exists record
@@ -400,7 +365,7 @@ interface PersistenceLayer {
      * @param bolusCalculatorResult record
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateBolusCalculatorResult(bolusCalculatorResult: BCR): TransactionResult<BCR>
+    fun insertOrUpdateBolusCalculatorResult(bolusCalculatorResult: BCR): Single<TransactionResult<BCR>>
 
     /**
      * Store records coming from NS to database
@@ -408,7 +373,7 @@ interface PersistenceLayer {
      * @param bolusCalculatorResults list of records
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsBolusCalculatorResults(bolusCalculatorResults: List<BCR>): TransactionResult<BCR>
+    fun syncNsBolusCalculatorResults(bolusCalculatorResults: List<BCR>): Single<TransactionResult<BCR>>
 
     /**
      * Update NS id' in database
@@ -416,7 +381,7 @@ interface PersistenceLayer {
      * @param bolusCalculatorResults records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateBolusCalculatorResultsNsIds(bolusCalculatorResults: List<BCR>): TransactionResult<BCR>
+    fun updateBolusCalculatorResultsNsIds(bolusCalculatorResults: List<BCR>): Single<TransactionResult<BCR>>
 
     /**
      * Invalidate record with id
@@ -428,23 +393,16 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateBolusCalculatorResult(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<BCR>
+    fun invalidateBolusCalculatorResult(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<BCR>>
 
     // GV
-    suspend fun getLastGlucoseValue(): GV?
-
-    /**
-     * Check if the latest glucose value's sensor supports advanced filtering.
-     * Derived from [getLastGlucoseValue]'s [app.aaps.core.data.model.SourceSensor].
-     */
-    suspend fun isAdvancedFilteringSupported(): Boolean =
-        getLastGlucoseValue()?.sourceSensor?.advancedFilteringSupported() ?: false
+    fun getLastGlucoseValue(): GV?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastGlucoseValueId(): Long?
+    fun getLastGlucoseValueId(): Long?
 
     /**
      * Get next changed record after id
@@ -452,10 +410,10 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementGlucoseValue(id: Long): Pair<GV, GV>?
-    suspend fun getBgReadingsDataFromTimeToTime(start: Long, end: Long, ascending: Boolean): List<GV>
-    suspend fun getBgReadingsDataFromTime(timestamp: Long, ascending: Boolean): List<GV>
-    suspend fun getBgReadingByNSId(nsId: String): GV?
+    fun getNextSyncElementGlucoseValue(id: Long): Maybe<Pair<GV, GV>>
+    fun getBgReadingsDataFromTimeToTime(start: Long, end: Long, ascending: Boolean): List<GV>
+    fun getBgReadingsDataFromTime(timestamp: Long, ascending: Boolean): Single<List<GV>>
+    fun getBgReadingByNSId(nsId: String): GV?
 
     /**
      * Invalidate record with id
@@ -467,8 +425,8 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateGlucoseValue(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): TransactionResult<GV>
-    suspend fun insertCgmSourceData(caller: Sources, glucoseValues: List<GV>, calibrations: List<Calibration>, sensorInsertionTime: Long?): TransactionResult<GV>
+    fun invalidateGlucoseValue(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): Single<TransactionResult<GV>>
+    fun insertCgmSourceData(caller: Sources, glucoseValues: List<GV>, calibrations: List<Calibration>, sensorInsertionTime: Long?): Single<TransactionResult<GV>>
 
     /**
      * Update NS id' in database
@@ -476,21 +434,14 @@ interface PersistenceLayer {
      * @param glucoseValues records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateGlucoseValuesNsIds(glucoseValues: List<GV>): TransactionResult<GV>
+    fun updateGlucoseValuesNsIds(glucoseValues: List<GV>): Single<TransactionResult<GV>>
 
     // EPS
-    /**
-     * Get all effective profile switches from db
-     *
-     * @return List of effective profile switches
-     */
-    suspend fun getEffectiveProfileSwitches(): List<EPS>
-
     /**
      *  Get effective profile switch record with lowest timestamp
      *  @return effective profile switch
      */
-    suspend fun getOldestEffectiveProfileSwitch(): EPS?
+    fun getOldestEffectiveProfileSwitch(): EPS?
 
     /**
      * Get running effective profile switch at time
@@ -498,13 +449,13 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running effective profile switch or null if none is running
      */
-    suspend fun getEffectiveProfileSwitchActiveAt(timestamp: Long): EPS?
+    fun getEffectiveProfileSwitchActiveAt(timestamp: Long): EPS?
 
     /**
      *  Get bolus by NS id
      *  @return effective profile switch
      */
-    suspend fun getEffectiveProfileSwitchByNSId(nsId: String): EPS?
+    fun getEffectiveProfileSwitchByNSId(nsId: String): EPS?
 
     /**
      * Get effective profile switches from time
@@ -513,7 +464,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of effective profile switches
      */
-    suspend fun getEffectiveProfileSwitchesFromTime(startTime: Long, ascending: Boolean): List<EPS>
+    fun getEffectiveProfileSwitchesFromTime(startTime: Long, ascending: Boolean): Single<List<EPS>>
 
     /**
      * Get effective profile switches from time including invalid records
@@ -522,7 +473,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of effective profile switches
      */
-    suspend fun getEffectiveProfileSwitchesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): List<EPS>
+    fun getEffectiveProfileSwitchesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): Single<List<EPS>>
 
     /**
      * Get effective profile switches in time interval
@@ -532,7 +483,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List effective profile switches
      */
-    suspend fun getEffectiveProfileSwitchesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<EPS>
+    fun getEffectiveProfileSwitchesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<EPS>
 
     /**
      * Get next changed record after id
@@ -540,21 +491,21 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementEffectiveProfileSwitch(id: Long): Pair<EPS, EPS>?
+    fun getNextSyncElementEffectiveProfileSwitch(id: Long): Maybe<Pair<EPS, EPS>>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastEffectiveProfileSwitchId(): Long?
+    fun getLastEffectiveProfileSwitchId(): Long?
 
     /**
      * Insert new record to database
      *
      * @param effectiveProfileSwitch record
      */
-    suspend fun insertOrUpdateEffectiveProfileSwitch(effectiveProfileSwitch: EPS): TransactionResult<EPS>
+    fun insertEffectiveProfileSwitch(effectiveProfileSwitch: EPS): Single<TransactionResult<EPS>>
 
     /**
      * Invalidate record with id
@@ -566,7 +517,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateEffectiveProfileSwitch(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<EPS>
+    fun invalidateEffectiveProfileSwitch(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<EPS>>
 
     /**
      * Store records coming from NS to database
@@ -575,7 +526,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsEffectiveProfileSwitches(effectiveProfileSwitches: List<EPS>, doLog: Boolean): TransactionResult<EPS>
+    fun syncNsEffectiveProfileSwitches(effectiveProfileSwitches: List<EPS>, doLog: Boolean): Single<TransactionResult<EPS>>
 
     /**
      * Update NS id' in database
@@ -583,7 +534,7 @@ interface PersistenceLayer {
      * @param effectiveProfileSwitches records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateEffectiveProfileSwitchesNsIds(effectiveProfileSwitches: List<EPS>): TransactionResult<EPS>
+    fun updateEffectiveProfileSwitchesNsIds(effectiveProfileSwitches: List<EPS>): Single<TransactionResult<EPS>>
 
     // PS
     /**
@@ -592,13 +543,13 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running profile switch or null if none is running
      */
-    suspend fun getProfileSwitchActiveAt(timestamp: Long): PS?
+    fun getProfileSwitchActiveAt(timestamp: Long): PS?
 
     /**
      *  Get profile switch by NS id
      *  @return profile switch
      */
-    suspend fun getProfileSwitchByNSId(nsId: String): PS?
+    fun getProfileSwitchByNSId(nsId: String): PS?
 
     /**
      * Get running profile switch at time with duration == 0 (infinite)
@@ -606,14 +557,14 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running profile switch or null if none is running
      */
-    suspend fun getPermanentProfileSwitchActiveAt(timestamp: Long): PS?
+    fun getPermanentProfileSwitchActiveAt(timestamp: Long): PS?
 
     /**
      * Get all profile switches from db
      *
      * @return List of profile switches
      */
-    suspend fun getProfileSwitches(): List<PS>
+    fun getProfileSwitches(): List<PS>
 
     /**
      * Get profile switches from time
@@ -622,7 +573,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of profile switches
      */
-    suspend fun getProfileSwitchesFromTime(startTime: Long, ascending: Boolean): List<PS>
+    fun getProfileSwitchesFromTime(startTime: Long, ascending: Boolean): Single<List<PS>>
 
     /**
      * Get profile switches from time including invalidated records
@@ -631,7 +582,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of profile switches
      */
-    suspend fun getProfileSwitchesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): List<PS>
+    fun getProfileSwitchesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): Single<List<PS>>
 
     /**
      * Get next changed record after id
@@ -639,14 +590,14 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementProfileSwitch(id: Long): Pair<PS, PS>?
+    fun getNextSyncElementProfileSwitch(id: Long): Maybe<Pair<PS, PS>>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastProfileSwitchId(): Long?
+    fun getLastProfileSwitchId(): Long?
 
     /**
      * Insert or update new record in database
@@ -658,7 +609,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateProfileSwitch(profileSwitch: PS, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<PS>
+    fun insertOrUpdateProfileSwitch(profileSwitch: PS, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<PS>>
 
     /**
      * Invalidate record with id
@@ -670,19 +621,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateProfileSwitch(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<PS>
-
-    /**
-     * Shorten an existing ProfileSwitch so it ends at [timestamp]. Works on both
-     * temporary (duration > 0) and permanent (duration = 0) records.
-     *
-     * @param id ProfileSwitch row id
-     * @param timestamp time the record should end
-     * @param action Action for UserEntry logging
-     * @param source Source for UserEntry logging
-     * @param listValues Values for UserEntry logging
-     */
-    suspend fun cancelProfileSwitch(id: Long, timestamp: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit> = listOf()): TransactionResult<PS>
+    fun invalidateProfileSwitch(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<PS>>
 
     /**
      * Store records coming from NS to database
@@ -691,7 +630,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsProfileSwitches(profileSwitches: List<PS>, doLog: Boolean): TransactionResult<PS>
+    fun syncNsProfileSwitches(profileSwitches: List<PS>, doLog: Boolean): Single<TransactionResult<PS>>
 
     /**
      * Update NS id' in database
@@ -699,7 +638,7 @@ interface PersistenceLayer {
      * @param profileSwitches records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateProfileSwitchesNsIds(profileSwitches: List<PS>): TransactionResult<PS>
+    fun updateProfileSwitchesNsIds(profileSwitches: List<PS>): Single<TransactionResult<PS>>
 
     // RM
     /**
@@ -708,13 +647,13 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running running mode or default
      */
-    suspend fun getRunningModeActiveAt(timestamp: Long): RM
+    fun getRunningModeActiveAt(timestamp: Long): RM
 
     /**
      *  Get running mode by NS id
      *  @return running mode
      */
-    suspend fun getRunningModeByNSId(nsId: String): RM?
+    fun getRunningModeByNSId(nsId: String): RM?
 
     /**
      * Get running running mode at time with duration == 0 (infinite)
@@ -722,14 +661,14 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running running mode or default
      */
-    suspend fun getPermanentRunningModeActiveAt(timestamp: Long): RM
+    fun getPermanentRunningModeActiveAt(timestamp: Long): RM
 
     /**
      * Get all running modes from db
      *
      * @return List of running modes
      */
-    suspend fun getRunningModes(): List<RM>
+    fun getRunningModes(): List<RM>
 
     /**
      * Get running modes from time
@@ -738,7 +677,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of running modes
      */
-    suspend fun getRunningModesFromTime(startTime: Long, ascending: Boolean): List<RM>
+    fun getRunningModesFromTime(startTime: Long, ascending: Boolean): Single<List<RM>>
 
     /**
      * Get running modes from time to time
@@ -748,8 +687,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of running modes
      */
-    suspend fun getRunningModesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<RM>
-
+    fun getRunningModesFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<RM>
     /**
      * Get running modes from time including invalidated records
      *
@@ -757,7 +695,7 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of running modes
      */
-    suspend fun getRunningModesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): List<RM>
+    fun getRunningModesIncludingInvalidFromTime(startTime: Long, ascending: Boolean): Single<List<RM>>
 
     /**
      * Get next changed record after id
@@ -765,14 +703,14 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementRunningMode(id: Long): Pair<RM, RM>?
+    fun getNextSyncElementRunningMode(id: Long): Maybe<Pair<RM, RM>>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastRunningModeId(): Long?
+    fun getLastRunningModeId(): Long?
 
     /**
      * Cancel temporary running mode if there is some running at provided timestamp
@@ -782,19 +720,7 @@ interface PersistenceLayer {
      * @param source Source for UserEntry logging
      * @param listValues Values for UserEntry logging
      */
-    suspend fun cancelCurrentRunningMode(timestamp: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit> = listOf()): TransactionResult<RM>
-
-    /**
-     * Cut the active RunningMode identified by [id] so its window ends at [timestamp].
-     * Used by scene revert to end an indefinite RM created on activation. No-op when the
-     * record is missing, invalid, started after [timestamp], or already finished. Distinct
-     * from [cancelCurrentRunningMode] which targets the currently active row by composition
-     * (and is temp-only — preserves user-set permanent rows for callers like LoopPlugin).
-     *
-     * @param id record id
-     * @param timestamp end time (also UserEntry timestamp)
-     */
-    suspend fun cancelRunningMode(id: Long, timestamp: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit> = listOf()): TransactionResult<RM>
+    fun cancelCurrentRunningMode(timestamp: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit> = listOf()): Single<TransactionResult<RM>>
 
     /**
      * Insert or update new record in database
@@ -806,7 +732,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateRunningMode(runningMode: RM, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<RM>
+    fun insertOrUpdateRunningMode(runningMode: RM, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<RM>>
 
     /**
      * Invalidate record with id
@@ -818,7 +744,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateRunningMode(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<RM>
+    fun invalidateRunningMode(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<RM>>
 
     /**
      * Store records coming from NS to database
@@ -827,7 +753,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsRunningModes(runningModes: List<RM>, doLog: Boolean): TransactionResult<RM>
+    fun syncNsRunningModes(runningModes: List<RM>, doLog: Boolean): Single<TransactionResult<RM>>
 
     /**
      * Update NS id' in database
@@ -835,7 +761,7 @@ interface PersistenceLayer {
      * @param runningModes records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateRunningModesNsIds(runningModes: List<RM>): TransactionResult<RM>
+    fun updateRunningModesNsIds(runningModes: List<RM>): Single<TransactionResult<RM>>
 
     // TB
     /**
@@ -844,26 +770,26 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running temporary basal or null if none is running
      */
-    suspend fun getTemporaryBasalActiveAt(timestamp: Long): TB?
+    fun getTemporaryBasalActiveAt(timestamp: Long): TB?
 
     /**
      * Get latest temporary basal
      *
      * @return temporary basal or null if none in db
      */
-    suspend fun getOldestTemporaryBasalRecord(): TB?
+    fun getOldestTemporaryBasalRecord(): TB?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastTemporaryBasalId(): Long?
+    fun getLastTemporaryBasalId(): Long?
 
     /**
      *  Get temporary basal by NS id
      *  @return temporary basal
      */
-    suspend fun getTemporaryBasalByNSId(nsId: String): TB?
+    fun getTemporaryBasalByNSId(nsId: String): TB?
 
     /**
      * Get running temporary basal in time interval
@@ -872,7 +798,7 @@ interface PersistenceLayer {
      * @param endTime to
      * @return List of temporary basals
      */
-    suspend fun getTemporaryBasalsActiveBetweenTimeAndTime(startTime: Long, endTime: Long): List<TB>
+    fun getTemporaryBasalsActiveBetweenTimeAndTime(startTime: Long, endTime: Long): List<TB>
 
     /**
      * Get running temporary basal starting in time interval
@@ -882,25 +808,25 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of temporary basals
      */
-    suspend fun getTemporaryBasalsStartingFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<TB>
+    fun getTemporaryBasalsStartingFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<TB>
 
     /**
-     * Get running temporary basal starting from time (suspend variant)
+     * Get running temporary basal starting from time including
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of temporary basals
+     * @return List of temporary basals as Single
      */
-    suspend fun getTemporaryBasalsStartingFromTime(startTime: Long, ascending: Boolean): List<TB>
+    fun getTemporaryBasalsStartingFromTime(startTime: Long, ascending: Boolean): Single<List<TB>>
 
     /**
-     * Get running temporary basal starting from time including invalided records (suspend variant)
+     * Get running temporary basal starting from time including invalided records
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of temporary basals including invalidated ones
+     * @return List of temporary basals as Single
      */
-    suspend fun getTemporaryBasalsStartingFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): List<TB>
+    fun getTemporaryBasalsStartingFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): Single<List<TB>>
 
     /**
      * Get next changed record after id
@@ -908,7 +834,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementTemporaryBasal(id: Long): Pair<TB, TB>?
+    fun getNextSyncElementTemporaryBasal(id: Long): Maybe<Pair<TB, TB>>
 
     /**
      * Invalidate record with id
@@ -920,7 +846,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateTemporaryBasal(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<TB>
+    fun invalidateTemporaryBasal(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<TB>>
 
     /**
      * Store records coming from NS to database
@@ -929,7 +855,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsTemporaryBasals(temporaryBasals: List<TB>, doLog: Boolean): TransactionResult<TB>
+    fun syncNsTemporaryBasals(temporaryBasals: List<TB>, doLog: Boolean): Single<TransactionResult<TB>>
 
     /**
      * Update NS id' in database
@@ -937,7 +863,7 @@ interface PersistenceLayer {
      * @param temporaryBasals records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateTemporaryBasalsNsIds(temporaryBasals: List<TB>): TransactionResult<TB>
+    fun updateTemporaryBasalsNsIds(temporaryBasals: List<TB>): Single<TransactionResult<TB>>
 
     /**
      * Sync record coming from pump to database
@@ -946,7 +872,7 @@ interface PersistenceLayer {
      * @param type record type because filed is not nullable in class
      * @return List of inserted/updated records
      */
-    suspend fun syncPumpTemporaryBasal(temporaryBasal: TB, type: TB.Type?): TransactionResult<TB>
+    fun syncPumpTemporaryBasal(temporaryBasal: TB, type: TB.Type?): Single<TransactionResult<TB>>
 
     /**
      * Sync end of temporary basal coming from pump to database
@@ -957,7 +883,7 @@ interface PersistenceLayer {
      * @param pumpSerial pump serial number
      * @return List of updated records
      */
-    suspend fun syncPumpCancelTemporaryBasalIfAny(timestamp: Long, endPumpId: Long, pumpType: PumpType, pumpSerial: String): TransactionResult<TB>
+    fun syncPumpCancelTemporaryBasalIfAny(timestamp: Long, endPumpId: Long, pumpType: PumpType, pumpSerial: String): Single<TransactionResult<TB>>
 
     /**
      * Invalidate temporary basal coming from pump in database
@@ -965,7 +891,7 @@ interface PersistenceLayer {
      * @param temporaryId temporary id of record
      * @return List of invalidated records
      */
-    suspend fun syncPumpInvalidateTemporaryBasalWithTempId(temporaryId: Long): TransactionResult<TB>
+    fun syncPumpInvalidateTemporaryBasalWithTempId(temporaryId: Long): Single<TransactionResult<TB>>
 
     /**
      * Invalidate temporary basal coming from pump in database
@@ -975,7 +901,7 @@ interface PersistenceLayer {
      * @param pumpSerial pump serial number
      * @return List of invalidated records
      */
-    suspend fun syncPumpInvalidateTemporaryBasalWithPumpId(pumpId: Long, pumpType: PumpType, pumpSerial: String): TransactionResult<TB>
+    fun syncPumpInvalidateTemporaryBasalWithPumpId(pumpId: Long, pumpType: PumpType, pumpSerial: String): Single<TransactionResult<TB>>
 
     /**
      * Sync record coming from pump to database using pump temp id
@@ -984,7 +910,7 @@ interface PersistenceLayer {
      * @param type record type because filed is not nullable in class
      * @return List of updated records
      */
-    suspend fun syncPumpTemporaryBasalWithTempId(temporaryBasal: TB, type: TB.Type?): TransactionResult<TB>
+    fun syncPumpTemporaryBasalWithTempId(temporaryBasal: TB, type: TB.Type?): Single<TransactionResult<TB>>
 
     /**
      * Store record to database using temporary pump id
@@ -992,7 +918,7 @@ interface PersistenceLayer {
      * @param temporaryBasal record to sync
      * @return List of inserted records
      */
-    suspend fun insertTemporaryBasalWithTempId(temporaryBasal: TB): TransactionResult<TB>
+    fun insertTemporaryBasalWithTempId(temporaryBasal: TB): Single<TransactionResult<TB>>
 
     // EB
     /**
@@ -1001,26 +927,26 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running extended bolus or null if none is running
      */
-    suspend fun getExtendedBolusActiveAt(timestamp: Long): EB?
+    fun getExtendedBolusActiveAt(timestamp: Long): EB?
 
     /**
      * Get latest extended bolus
      *
      * @return extended bolus or null if none in db
      */
-    suspend fun getOldestExtendedBolusRecord(): EB?
+    fun getOldestExtendedBolusRecord(): EB?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastExtendedBolusId(): Long?
+    fun getLastExtendedBolusId(): Long?
 
     /**
      *  Get extended bolus by NS id
      *  @return extended bolus
      */
-    suspend fun getExtendedBolusByNSId(nsId: String): EB?
+    fun getExtendedBolusByNSId(nsId: String): EB?
 
     /**
      * Get running extended bolus starting in time interval
@@ -1030,25 +956,25 @@ interface PersistenceLayer {
      * @param ascending sort order
      * @return List of extended boluses
      */
-    suspend fun getExtendedBolusesStartingFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<EB>
+    fun getExtendedBolusesStartingFromTimeToTime(startTime: Long, endTime: Long, ascending: Boolean): List<EB>
 
     /**
-     * Get running extended boluses starting from time (suspend variant)
+     * Get running extended boluses starting from time
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of extended boluses
+     * @return List of extended boluses as Single
      */
-    suspend fun getExtendedBolusesStartingFromTime(startTime: Long, ascending: Boolean): List<EB>
+    fun getExtendedBolusesStartingFromTime(startTime: Long, ascending: Boolean): Single<List<EB>>
 
     /**
-     * Get running extended boluses starting from time including invalided records (suspend variant)
+     * Get running extended boluses starting from time including invalided records
      *
      * @param startTime from
      * @param ascending sort order
-     * @return List of extended boluses including invalidated ones
+     * @return List of extended boluses as Single
      */
-    suspend fun getExtendedBolusStartingFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): List<EB>
+    fun getExtendedBolusStartingFromTimeIncludingInvalid(startTime: Long, ascending: Boolean): Single<List<EB>>
 
     /**
      * Get next changed record after id
@@ -1056,7 +982,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementExtendedBolus(id: Long): Pair<EB, EB>?
+    fun getNextSyncElementExtendedBolus(id: Long): Maybe<Pair<EB, EB>>
 
     /**
      * Invalidate record with id
@@ -1068,7 +994,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateExtendedBolus(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<EB>
+    fun invalidateExtendedBolus(id: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): Single<TransactionResult<EB>>
 
     /**
      * Store records coming from NS to database
@@ -1077,7 +1003,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsExtendedBoluses(extendedBoluses: List<EB>, doLog: Boolean): TransactionResult<EB>
+    fun syncNsExtendedBoluses(extendedBoluses: List<EB>, doLog: Boolean): Single<TransactionResult<EB>>
 
     /**
      * Update NS id' in database
@@ -1085,7 +1011,7 @@ interface PersistenceLayer {
      * @param extendedBoluses records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateExtendedBolusesNsIds(extendedBoluses: List<EB>): TransactionResult<EB>
+    fun updateExtendedBolusesNsIds(extendedBoluses: List<EB>): Single<TransactionResult<EB>>
 
     /**
      * Sync record coming from pump to database
@@ -1093,7 +1019,7 @@ interface PersistenceLayer {
      * @param extendedBolus record to sync
      * @return List of inserted/updated records
      */
-    suspend fun syncPumpExtendedBolus(extendedBolus: EB): TransactionResult<EB>
+    fun syncPumpExtendedBolus(extendedBolus: EB): Single<TransactionResult<EB>>
 
     /**
      * Sync end of extended bolus coming from pump to database
@@ -1104,7 +1030,7 @@ interface PersistenceLayer {
      * @param pumpSerial pump serial number
      * @return List of updated records
      */
-    suspend fun syncPumpStopExtendedBolusWithPumpId(timestamp: Long, endPumpId: Long, pumpType: PumpType, pumpSerial: String): TransactionResult<EB>
+    fun syncPumpStopExtendedBolusWithPumpId(timestamp: Long, endPumpId: Long, pumpType: PumpType, pumpSerial: String): Single<TransactionResult<EB>>
 
     // TT
     /**
@@ -1113,37 +1039,22 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return running temporary target or null if none is running
      */
-    suspend fun getTemporaryTargetActiveAt(timestamp: Long): TT?
+    fun getTemporaryTargetActiveAt(timestamp: Long): TT?
 
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastTemporaryTargetId(): Long?
+    fun getLastTemporaryTargetId(): Long?
 
     /**
      *  Get temporary target by NS id
      *  @return temporary target
      */
-    suspend fun getTemporaryTargetByNSId(nsId: String): TT?
+    fun getTemporaryTargetByNSId(nsId: String): TT?
 
-    /**
-     * Get temporary targets from time (suspend variant)
-     *
-     * @param timestamp from
-     * @param ascending sort order
-     * @return List of temporary targets
-     */
-    suspend fun getTemporaryTargetDataFromTime(timestamp: Long, ascending: Boolean): List<TT>
-
-    /**
-     * Get temporary targets from time including invalidated (suspend variant)
-     *
-     * @param timestamp from
-     * @param ascending sort order
-     * @return List of temporary targets including invalidated ones
-     */
-    suspend fun getTemporaryTargetDataIncludingInvalidFromTime(timestamp: Long, ascending: Boolean): List<TT>
+    fun getTemporaryTargetDataFromTime(timestamp: Long, ascending: Boolean): Single<List<TT>>
+    fun getTemporaryTargetDataIncludingInvalidFromTime(timestamp: Long, ascending: Boolean): Single<List<TT>>
 
     /**
      * Get next changed record after id
@@ -1151,7 +1062,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementTemporaryTarget(id: Long): Pair<TT, TT>?
+    fun getNextSyncElementTemporaryTarget(id: Long): Maybe<Pair<TT, TT>>
 
     /**
      * Invalidate record with id
@@ -1163,9 +1074,9 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateTemporaryTarget(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): TransactionResult<TT>
-    suspend fun insertAndCancelCurrentTemporaryTarget(temporaryTarget: TT, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): TransactionResult<TT>
-    suspend fun cancelCurrentTemporaryTargetIfAny(timestamp: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): TransactionResult<TT>
+    fun invalidateTemporaryTarget(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): Single<TransactionResult<TT>>
+    fun insertAndCancelCurrentTemporaryTarget(temporaryTarget: TT, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): Single<TransactionResult<TT>>
+    fun cancelCurrentTemporaryTargetIfAny(timestamp: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): Single<TransactionResult<TT>>
 
     /**
      * Store records coming from NS to database
@@ -1174,7 +1085,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsTemporaryTargets(temporaryTargets: List<TT>, doLog: Boolean): TransactionResult<TT>
+    fun syncNsTemporaryTargets(temporaryTargets: List<TT>, doLog: Boolean): Single<TransactionResult<TT>>
 
     /**
      * Update NS id' in database
@@ -1182,42 +1093,26 @@ interface PersistenceLayer {
      * @param temporaryTargets records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateTemporaryTargetsNsIds(temporaryTargets: List<TT>): TransactionResult<TT>
+    fun updateTemporaryTargetsNsIds(temporaryTargets: List<TT>): Single<TransactionResult<TT>>
 
     // TE
     /**
      *  Get highest id in database
      *  @return id
      */
-    suspend fun getLastTherapyEventId(): Long?
+    fun getLastTherapyEventId(): Long?
 
     /**
      *  Get therapy event by NS id
      *  @return therapy event
      */
-    suspend fun getTherapyEventByNSId(nsId: String): TE?
+    fun getTherapyEventByNSId(nsId: String): TE?
 
-    suspend fun getLastTherapyRecordUpToNow(type: TE.Type): TE?
-    suspend fun getTherapyEventDataFromToTime(from: Long, to: Long): List<TE>
-
-    /**
-     * Get therapy events from time including invalidated (suspend variant)
-     *
-     * @param timestamp from
-     * @param ascending sort order
-     * @return List of therapy events including invalidated ones
-     */
-    suspend fun getTherapyEventDataIncludingInvalidFromTime(timestamp: Long, ascending: Boolean): List<TE>
-
-    /**
-     * Get therapy events from time (suspend variant)
-     *
-     * @param timestamp from
-     * @param ascending sort order
-     * @return List of therapy events
-     */
-    suspend fun getTherapyEventDataFromTime(timestamp: Long, ascending: Boolean): List<TE>
-    suspend fun getTherapyEventDataFromTime(timestamp: Long, type: TE.Type, ascending: Boolean): List<TE>
+    fun getLastTherapyRecordUpToNow(type: TE.Type): TE?
+    fun getTherapyEventDataFromToTime(from: Long, to: Long): Single<List<TE>>
+    fun getTherapyEventDataIncludingInvalidFromTime(timestamp: Long, ascending: Boolean): Single<List<TE>>
+    fun getTherapyEventDataFromTime(timestamp: Long, ascending: Boolean): Single<List<TE>>
+    fun getTherapyEventDataFromTime(timestamp: Long, type: TE.Type, ascending: Boolean): List<TE>
 
     /**
      * Get next changed record after id
@@ -1225,7 +1120,7 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementTherapyEvent(id: Long): Pair<TE, TE>?
+    fun getNextSyncElementTherapyEvent(id: Long): Maybe<Pair<TE, TE>>
 
     /**
      * Insert record if not exists
@@ -1237,14 +1132,14 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of inserted records
      */
-    suspend fun insertPumpTherapyEventIfNewByTimestamp(
+    fun insertPumpTherapyEventIfNewByTimestamp(
         therapyEvent: TE,
         timestamp: Long = System.currentTimeMillis(),
         action: Action,
         source: Sources,
         note: String?,
         listValues: List<ValueWithUnit>
-    ): TransactionResult<TE>
+    ): Single<TransactionResult<TE>>
 
     /**
      * Insert or update if exists record
@@ -1252,7 +1147,8 @@ interface PersistenceLayer {
      * Create new scratch file from selection
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateTherapyEvent(therapyEvent: TE): TransactionResult<TE>
+    fun insertOrUpdateTherapyEvent(therapyEvent: TE): Single<TransactionResult<TE>>
+
 
     /**
      * Invalidate record with id
@@ -1263,17 +1159,7 @@ interface PersistenceLayer {
      * @param listValues Values for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateTherapyEvent(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): TransactionResult<TE>
-
-    /**
-     * Cut the active TherapyEvent identified by [id] so its window ends at [timestamp].
-     * Used by scene revert to end an indefinite TE created on activation. No-op when the
-     * record is missing, invalid, started after [timestamp], or already finished.
-     *
-     * @param id record id
-     * @param timestamp end time (also UserEntry timestamp)
-     */
-    suspend fun cancelTherapyEvent(id: Long, timestamp: Long, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit> = listOf()): TransactionResult<TE>
+    fun invalidateTherapyEvent(id: Long, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): Single<TransactionResult<TE>>
 
     /**
      * Invalidate records with notes containing string
@@ -1283,7 +1169,7 @@ interface PersistenceLayer {
      * @param source Source for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateTherapyEventsWithNote(note: String, action: Action, source: Sources): TransactionResult<TE>
+    fun invalidateTherapyEventsWithNote(note: String, action: Action, source: Sources): Single<TransactionResult<TE>>
 
     /**
      * Store records coming from NS to database
@@ -1292,7 +1178,7 @@ interface PersistenceLayer {
      * @param doLog create UserEntry if true
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsTherapyEvents(therapyEvents: List<TE>, doLog: Boolean): TransactionResult<TE>
+    fun syncNsTherapyEvents(therapyEvents: List<TE>, doLog: Boolean): Single<TransactionResult<TE>>
 
     /**
      * Update NS id' in database
@@ -1300,7 +1186,7 @@ interface PersistenceLayer {
      * @param therapyEvents records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateTherapyEventsNsIds(therapyEvents: List<TE>): TransactionResult<TE>
+    fun updateTherapyEventsNsIds(therapyEvents: List<TE>): Single<TransactionResult<TE>>
 
     // DS
     /**
@@ -1309,14 +1195,14 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementDeviceStatus(id: Long): DS?
+    fun getNextSyncElementDeviceStatus(id: Long): Maybe<DS>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastDeviceStatusId(): Long?
+    fun getLastDeviceStatusId(): Long?
 
     fun insertDeviceStatus(deviceStatus: DS)
 
@@ -1326,7 +1212,7 @@ interface PersistenceLayer {
      * @param deviceStatuses records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateDeviceStatusesNsIds(deviceStatuses: List<DS>): TransactionResult<DS>
+    fun updateDeviceStatusesNsIds(deviceStatuses: List<DS>): Single<TransactionResult<DS>>
 
     // HR
 
@@ -1336,7 +1222,7 @@ interface PersistenceLayer {
      * @param startTime from
      * @return List of heart rates
      */
-    suspend fun getHeartRatesFromTime(startTime: Long): List<HR>
+    fun getHeartRatesFromTime(startTime: Long): List<HR>
 
     /**
      * Get heart rates in time interval
@@ -1345,17 +1231,15 @@ interface PersistenceLayer {
      * @param endTime to
      * @return List of heart rates
      */
-    suspend fun getHeartRatesFromTimeToTime(startTime: Long, endTime: Long): List<HR>
+    fun getHeartRatesFromTimeToTime(startTime: Long, endTime: Long): List<HR>
 
     /**
-     * Insert or update multiple records in a single DB transaction. Emits one change event
-     * for the whole batch instead of one per row. Callers with a single row should pass
-     * `listOf(row)`.
+     * Insert or update if exists record
      *
-     * @param heartRates records
+     * @param heartRate record
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateHeartRates(heartRates: List<HR>): TransactionResult<HR>
+    fun insertOrUpdateHeartRate(heartRate: HR): Single<TransactionResult<HR>>
 
     // FD
     /**
@@ -1363,7 +1247,7 @@ interface PersistenceLayer {
      *
      * @return List of records
      */
-    suspend fun getFoods(): List<FD>
+    fun getFoods(): Single<List<FD>>
 
     /**
      * Get next changed record after id
@@ -1371,22 +1255,14 @@ interface PersistenceLayer {
      * @param id record id
      * @return database record
      */
-    suspend fun getNextSyncElementFood(id: Long): Pair<FD, FD>?
+    fun getNextSyncElementFood(id: Long): Maybe<Pair<FD, FD>>
 
     /**
      * Get record with highest id
      *
      * @return database record id
      */
-    suspend fun getLastFoodId(): Long?
-
-    /**
-     * Insert or update a food record
-     *
-     * @param food record to insert or update
-     * @return List of changed records
-     */
-    suspend fun insertOrUpdateFood(food: FD): TransactionResult<FD>
+    fun getLastFoodId(): Long?
 
     /**
      * Invalidate record with id
@@ -1396,7 +1272,7 @@ interface PersistenceLayer {
      * @param source Source for UserEntry logging
      * @return List of changed records
      */
-    suspend fun invalidateFood(id: Long, action: Action, source: Sources): TransactionResult<FD>
+    fun invalidateFood(id: Long, action: Action, source: Sources): Single<TransactionResult<FD>>
 
     /**
      * Store records coming from NS to database
@@ -1404,7 +1280,7 @@ interface PersistenceLayer {
      * @param foods list of records
      * @return List of inserted/updated/invalidated records
      */
-    suspend fun syncNsFood(foods: List<FD>): TransactionResult<FD>
+    fun syncNsFood(foods: List<FD>): Single<TransactionResult<FD>>
 
     /**
      * Update NS id' in database
@@ -1412,14 +1288,12 @@ interface PersistenceLayer {
      * @param foods records containing NS id'
      * @return List of modified records
      */
-    suspend fun updateFoodsNsIds(foods: List<FD>): TransactionResult<FD>
+    fun updateFoodsNsIds(foods: List<FD>): Single<TransactionResult<FD>>
 
     // UE
-    suspend fun insertUserEntries(entries: List<UE>): TransactionResult<UE>
-
-    suspend fun getUserEntryDataFromTime(timestamp: Long): List<UE>
-
-    suspend fun getUserEntryFilteredDataFromTime(timestamp: Long): List<UE>
+    fun insertUserEntries(entries: List<UE>): Single<TransactionResult<UE>>
+    fun getUserEntryDataFromTime(timestamp: Long): Single<List<UE>>
+    fun getUserEntryFilteredDataFromTime(timestamp: Long): Single<List<UE>>
 
     // TDD
 
@@ -1428,7 +1302,7 @@ interface PersistenceLayer {
      *
      * @param timestamp from
      */
-    suspend fun clearCachedTddData(timestamp: Long)
+    fun clearCachedTddData(timestamp: Long)
 
     /**
      * Get newest 'count' records from database
@@ -1437,7 +1311,7 @@ interface PersistenceLayer {
      * @param ascending sorted ascending if true
      * @return List of tdds
      */
-    suspend fun getLastTotalDailyDoses(count: Int, ascending: Boolean): List<TDD>
+    fun getLastTotalDailyDoses(count: Int, ascending: Boolean): List<TDD>
 
     /**
      * Get cached TDD for specified time
@@ -1445,12 +1319,12 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return tdd or null
      */
-    suspend fun getCalculatedTotalDailyDose(timestamp: Long): TDD?
+    fun getCalculatedTotalDailyDose(timestamp: Long): TDD?
 
     /**
      * Insert or update record
      */
-    suspend fun insertOrUpdateCachedTotalDailyDose(totalDailyDose: TDD): TransactionResult<TDD>
+    fun insertOrUpdateCachedTotalDailyDose(totalDailyDose: TDD): Single<TransactionResult<TDD>>
 
     /**
      * Insert or update if exists record
@@ -1458,7 +1332,7 @@ interface PersistenceLayer {
      * @param totalDailyDose record
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateTotalDailyDose(totalDailyDose: TDD): TransactionResult<TDD>
+    fun insertOrUpdateTotalDailyDose(totalDailyDose: TDD): Single<TransactionResult<TDD>>
 
     // SC
 
@@ -1468,7 +1342,7 @@ interface PersistenceLayer {
      * @param from time
      * @return list of step count records
      */
-    suspend fun getStepsCountFromTime(from: Long): List<SC>
+    fun getStepsCountFromTime(from: Long): List<SC>
 
     /**
      * Get step counts records from interval
@@ -1477,7 +1351,7 @@ interface PersistenceLayer {
      * @param endTime to
      * @return list of step count records
      */
-    suspend fun getStepsCountFromTimeToTime(startTime: Long, endTime: Long): List<SC>
+    fun getStepsCountFromTimeToTime(startTime: Long, endTime: Long): List<SC>
 
     /**
      * Get latest step counts record from interval
@@ -1486,17 +1360,15 @@ interface PersistenceLayer {
      * @param endTime to
      * @return step count record
      */
-    suspend fun getLastStepsCountFromTimeToTime(startTime: Long, endTime: Long): SC?
+    fun getLastStepsCountFromTimeToTime(startTime: Long, endTime: Long): SC?
 
     /**
-     * Insert or update multiple records in a single DB transaction. Emits one change event
-     * for the whole batch instead of one per row. Callers with a single row should pass
-     * `listOf(row)`.
+     * Insert or update if exists record
      *
-     * @param stepsCounts records
+     * @param stepsCount record
      * @return List of inserted/updated records
      */
-    suspend fun insertOrUpdateStepsCounts(stepsCounts: List<SC>): TransactionResult<SC>
+    fun insertOrUpdateStepsCount(stepsCount: SC): Single<TransactionResult<SC>>
 
     // VersionChange
 
@@ -1508,7 +1380,7 @@ interface PersistenceLayer {
      * @param gitRemote gitRemote (shortened)
      * @param commitHash commitHash
      */
-    suspend fun insertVersionChangeIfChanged(versionName: String, versionCode: Int, gitRemote: String?, commitHash: String?)
+    fun insertVersionChangeIfChanged(versionName: String, versionCode: Int, gitRemote: String?, commitHash: String?): Completable
 
     /**
      * Get list of db changed records in db since time
@@ -1519,7 +1391,7 @@ interface PersistenceLayer {
      * @param offset
      * @return List of arrays of records
      */
-    suspend fun collectNewEntriesSince(since: Long, until: Long, limit: Int, offset: Int): NE
+    fun collectNewEntriesSince(since: Long, until: Long, limit: Int, offset: Int): NE
     class TransactionResult<T> {
 
         val inserted = mutableListOf<T>()
@@ -1551,7 +1423,7 @@ interface PersistenceLayer {
      * @param timestamp time
      * @return APSResult or null
      */
-    suspend fun getApsResultCloseTo(timestamp: Long): APSResult?
+    fun getApsResultCloseTo(timestamp: Long): APSResult?
 
     /**
      * Get list of APSResults for interval
@@ -1560,7 +1432,7 @@ interface PersistenceLayer {
      * @param end to
      * @return List of APSResult
      */
-    suspend fun getApsResults(start: Long, end: Long): List<APSResult>
+    fun getApsResults(start: Long, end: Long): List<APSResult>
 
     /**
      * Insert or update ApsResult record
@@ -1568,33 +1440,6 @@ interface PersistenceLayer {
      * @param apsResult record
      * @return List of inserted records
      */
-    suspend fun insertOrUpdateApsResult(apsResult: APSResult): TransactionResult<APSResult>
+    fun insertOrUpdateApsResult(apsResult: APSResult): Single<TransactionResult<APSResult>>
 
-    /**
-     * Generic glucose lookup by (sourceSensor, pumpId).
-     * Intended for plugins that persist a source-specific hardware/event id in InterfaceIDs.pumpId.
-     */
-    suspend fun getGlucoseValueByPumpIdAndSource(source: SourceSensor, pumpId: Long): GV?
-
-    /**
-     * Generic glucose lookup by (sourceSensor, pumpId range).
-     * Caller owns any vendor-specific interpretation of pumpId semantics.
-     */
-    suspend fun getGlucoseValuesByPumpIdRange(source: SourceSensor, startPumpId: Long, endPumpId: Long): List<GV>
 }
-
-/**
- * Observe changes for a specific domain type using reified type parameter
- * @param T The domain type to observe (BS, CA, EB, TB, TT, TE, PS, EPS, BCR, etc.)
- * @return Flow that emits Unit when entities of type T change
- *
- * Example usage:
- * ```
- * persistenceLayer.observeChanges<TB>()
- *     .debounce(1000L)
- *     .onEach { loadData() }
- *     .launchIn(viewModelScope)
- * ```
- */
-inline fun <reified T : Any> PersistenceLayer.observeChanges(): Flow<List<T>> =
-    observeChanges(T::class.java)

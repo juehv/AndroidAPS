@@ -5,7 +5,6 @@ import app.aaps.database.daos.CarbsDao
 import app.aaps.database.entities.Carbs
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `updates NS ID when different`() = runTest {
+    fun `updates NS ID when different`() {
         val newNsId = "new-ns-123"
         val current = createCarbs(id = 1, nsId = "old-ns")
         val update = createCarbs(id = 1, nsId = newNsId)
@@ -46,7 +45,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `does not update when NS ID is same`() = runTest {
+    fun `does not update when NS ID is same`() {
         val sameNsId = "same-ns"
         val current = createCarbs(id = 1, nsId = sameNsId)
         val update = createCarbs(id = 1, nsId = sameNsId)
@@ -63,7 +62,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `skips when carbs not found`() = runTest {
+    fun `skips when carbs not found`() {
         val update = createCarbs(id = 999, nsId = "new-ns")
 
         whenever(carbsDao.findById(999)).thenReturn(null)
@@ -78,7 +77,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `updates multiple carbs`() = runTest {
+    fun `updates multiple carbs`() {
         val carbs1 = createCarbs(id = 1, nsId = "old-1")
         val carbs2 = createCarbs(id = 2, nsId = "old-2")
         val update1 = createCarbs(id = 1, nsId = "new-1")
@@ -100,7 +99,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `handles empty carbs list`() = runTest {
+    fun `handles empty carbs list`() {
         val transaction = UpdateNsIdCarbsTransaction(emptyList())
         transaction.database = database
         val result = transaction.run()
@@ -111,7 +110,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `preserves carbs amount when updating NS ID`() = runTest {
+    fun `preserves carbs amount when updating NS ID`() {
         val amount = 50.0
         val current = createCarbs(id = 1, nsId = "old", amount = amount)
         val update = createCarbs(id = 1, nsId = "new")
@@ -126,7 +125,7 @@ class UpdateNsIdCarbsTransactionTest {
     }
 
     @Test
-    fun `updates from null NS ID to actual value`() = runTest {
+    fun `updates from null NS ID to actual value`() {
         val current = createCarbs(id = 1, nsId = null)
         val update = createCarbs(id = 1, nsId = "new-ns")
 

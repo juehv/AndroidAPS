@@ -1,6 +1,7 @@
 package app.aaps.database.entities
 
-import com.google.common.truth.Truth.assertThat
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.jupiter.api.Test
 
 class HeartRateTest {
@@ -8,19 +9,19 @@ class HeartRateTest {
     @Test
     fun contentEqualsTo_equals() {
         val hr1 = createHeartRate()
-        assertThat(hr1.contentEqualsTo(hr1)).isTrue()
-        assertThat(hr1.contentEqualsTo(hr1.copy())).isTrue()
-        assertThat(hr1.contentEqualsTo(hr1.copy(id = 2, version = 2, dateCreated = 1L, referenceId = 4L))).isTrue()
+        assertTrue(hr1.contentEqualsTo(hr1))
+        assertTrue(hr1.contentEqualsTo(hr1.copy()))
+        assertTrue(hr1.contentEqualsTo(hr1.copy(id = 2, version = 2, dateCreated = 1L, referenceId = 4L)))
     }
 
     @Test
     fun contentEqualsTo_notEquals() {
         val hr1 = createHeartRate()
-        assertThat(hr1.contentEqualsTo(hr1.copy(duration = 60_001L))).isFalse()
-        assertThat(hr1.contentEqualsTo(hr1.copy(timestamp = 2L))).isFalse()
-        assertThat(hr1.contentEqualsTo(hr1.copy(duration = 60_001L))).isFalse()
-        assertThat(hr1.contentEqualsTo(hr1.copy(beatsPerMinute = 100.0))).isFalse()
-        assertThat(hr1.contentEqualsTo(hr1.copy(isValid = false))).isFalse()
+        assertFalse(hr1.contentEqualsTo(hr1.copy(duration = 60_001L)))
+        assertFalse(hr1.contentEqualsTo(hr1.copy(timestamp = 2L)))
+        assertFalse(hr1.contentEqualsTo(hr1.copy(duration = 60_001L)))
+        assertFalse(hr1.contentEqualsTo(hr1.copy(beatsPerMinute = 100.0)))
+        assertFalse(hr1.contentEqualsTo(hr1.copy(isValid = false)))
     }
 
     fun HeartRate.contentEqualsTo(other: HeartRate): Boolean {

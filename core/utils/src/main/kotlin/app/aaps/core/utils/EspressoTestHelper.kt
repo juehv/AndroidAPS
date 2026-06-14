@@ -5,7 +5,7 @@ fun isRunningTest(): Boolean {
     return try {
         Class.forName("androidx.test.espresso.Espresso")
         true
-    } catch (_: ClassNotFoundException) {
+    } catch (e: ClassNotFoundException) {
         false
     }
 }
@@ -15,7 +15,7 @@ fun isRunningRealPumpTest(): Boolean {
     return try {
         Class.forName("app.aaps.RealPumpTest")
         true
-    } catch (_: ClassNotFoundException) {
+    } catch (e: ClassNotFoundException) {
         false
     }
 }

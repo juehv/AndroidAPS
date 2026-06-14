@@ -1,8 +1,7 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.compose.compiler)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.hilt)
+    id("kotlin-android")
+    id("kotlin-kapt")
     id("android-module-dependencies")
     id("test-module-dependencies")
     id("jacoco-module-dependencies")
@@ -10,31 +9,31 @@ plugins {
 
 android {
     namespace = "app.aaps.pump.eopatch"
+    buildFeatures {
+        dataBinding = true
+    }
 }
 
 dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:interfaces"))
     implementation(project(":core:keys"))
+    implementation(project(":core:libraries"))
+    implementation(project(":core:utils"))
     implementation(project(":core:ui"))
+    implementation(project(":pump:eopatch:core"))
+    implementation(project(":core:validators"))
 
     testImplementation(project(":shared:tests"))
     testImplementation(project(":core:objects"))
 
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.hilt.navigation.compose)
-    implementation(libs.com.google.code.gson)
-
-    implementation(libs.com.google.guava)
+    api(libs.com.google.guava)
 
     //RxAndroidBle
-    implementation(libs.io.reactivex.rxjava3.rxandroid)
+    api(libs.io.reactivex.rxjava3.rxandroid)
     api(libs.com.polidea.rxandroidble3)
-    implementation(libs.com.jakewharton.rx3.replaying.share)
+    api(libs.com.jakewharton.rx3.replaying.share)
 
-    implementation(libs.com.google.dagger.hilt.android)
-
-    ksp(libs.com.google.dagger.compiler)
-    ksp(libs.com.google.dagger.hilt.compiler)
-    ksp(libs.com.google.dagger.android.processor)
+    kapt(libs.com.google.dagger.compiler)
+    kapt(libs.com.google.dagger.android.processor)
 }

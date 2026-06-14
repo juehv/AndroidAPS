@@ -1,16 +1,18 @@
 package app.aaps.plugins.automation.triggers
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SyncProblem
+import android.widget.LinearLayout
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.utils.JsonHelper.safeGetInt
 import app.aaps.core.utils.JsonHelper.safeGetString
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.Comparator
 import app.aaps.plugins.automation.elements.InputDuration
+import app.aaps.plugins.automation.elements.LabelWithElement
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
+import java.util.Optional
 
 class TriggerPumpLastConnection(injector: HasAndroidInjector) : Trigger(injector) {
 
@@ -38,8 +40,8 @@ class TriggerPumpLastConnection(injector: HasAndroidInjector) : Trigger(injector
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
-        val lastConnection = activePlugin.activePump.lastDataTime.value
+    override fun shouldRun(): Boolean {
+        val lastConnection = activePlugin.activePump.lastDataTime
         if (lastConnection == 0L && comparator.value === Comparator.Compare.IS_NOT_AVAILABLE) {
             aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
             return true
@@ -71,9 +73,15 @@ class TriggerPumpLastConnection(injector: HasAndroidInjector) : Trigger(injector
     override fun friendlyDescription(): String =
         rh.gs(R.string.automation_trigger_pump_last_connection_compared, rh.gs(comparator.value.stringRes), minutesAgo.value)
 
-    override fun composeIcon() = Icons.Filled.SyncProblem
-    override fun composeIconTint() = IconTint.Device
+    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.objects.R.drawable.ic_remove)
 
     override fun duplicate(): Trigger = TriggerPumpLastConnection(injector, this)
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, R.string.automation_trigger_pump_last_connection_label, this))
+            .add(comparator)
+            .add(LabelWithElement(rh, rh.gs(R.string.automation_trigger_pump_last_connection_description) + ": ", "", minutesAgo))
+            .build(root)
+    }
 }

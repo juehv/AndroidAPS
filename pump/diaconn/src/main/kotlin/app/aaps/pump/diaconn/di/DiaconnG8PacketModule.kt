@@ -2,8 +2,6 @@ package app.aaps.pump.diaconn.di
 
 import dagger.Module
 import dagger.android.ContributesAndroidInjector
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import app.aaps.pump.diaconn.packet.AppCancelSettingPacket
 import app.aaps.pump.diaconn.packet.AppCancelSettingResponsePacket
 import app.aaps.pump.diaconn.packet.AppConfirmSettingPacket
@@ -79,7 +77,6 @@ import app.aaps.pump.diaconn.packet.TimeSettingPacket
 import app.aaps.pump.diaconn.packet.TimeSettingResponsePacket
 
 @Module
-@InstallIn(SingletonComponent::class)
 @Suppress("unused", "SpellCheckingInspection")
 interface DiaconnG8PacketModule {
     @ContributesAndroidInjector fun contributesDiaconnG8Packet(): DiaconnG8Packet

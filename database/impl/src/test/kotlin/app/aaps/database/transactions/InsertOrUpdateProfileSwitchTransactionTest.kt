@@ -7,7 +7,6 @@ import app.aaps.database.entities.data.GlucoseUnit
 import app.aaps.database.entities.embedments.InsulinConfiguration
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -29,7 +28,7 @@ class InsertOrUpdateProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `inserts new profile switch when id not found`() = runTest {
+    fun `inserts new profile switch when id not found`() {
         val profileSwitch = createProfileSwitch(id = 1, percentage = 100)
 
         whenever(profileSwitchDao.findById(1)).thenReturn(null)
@@ -47,7 +46,7 @@ class InsertOrUpdateProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `updates existing profile switch when id found`() = runTest {
+    fun `updates existing profile switch when id found`() {
         val profileSwitch = createProfileSwitch(id = 1, percentage = 120)
         val existing = createProfileSwitch(id = 1, percentage = 100)
 
@@ -66,7 +65,7 @@ class InsertOrUpdateProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `updates profile switch percentage`() = runTest {
+    fun `updates profile switch percentage`() {
         val existing = createProfileSwitch(id = 1, percentage = 100)
         val updated = createProfileSwitch(id = 1, percentage = 150)
 
@@ -81,7 +80,7 @@ class InsertOrUpdateProfileSwitchTransactionTest {
     }
 
     @Test
-    fun `inserts profile switch with timeshift`() = runTest {
+    fun `inserts profile switch with timeshift`() {
         val profileSwitch = createProfileSwitch(id = 1, percentage = 100, timeshift = 2)
 
         whenever(profileSwitchDao.findById(1)).thenReturn(null)
@@ -110,6 +109,6 @@ class InsertOrUpdateProfileSwitchTransactionTest {
         percentage = percentage,
         duration = 0,
         interfaceIDs_backing = InterfaceIDs(),
-        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L, 1.0)
+        insulinConfiguration = InsulinConfiguration("some", 600000L, 60000L)
     ).also { it.id = id }
 }

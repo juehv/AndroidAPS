@@ -2,12 +2,11 @@ package app.aaps.plugins.sync.tidepool.elements
 
 import app.aaps.core.data.model.BS
 import app.aaps.core.data.model.CA
-import app.aaps.core.data.model.ICfg
 import app.aaps.core.interfaces.utils.DateUtil
 import com.google.gson.annotations.Expose
 import java.util.UUID
 
-class WizardElement(carbs: CA, dateUtil: DateUtil, iCfg: ICfg) : BaseElement(carbs.timestamp, UUID.nameUUIDFromBytes(("AAPS-wizard" + carbs.timestamp).toByteArray()).toString(), dateUtil) {
+class WizardElement(carbs: CA, dateUtil: DateUtil) : BaseElement(carbs.timestamp, UUID.nameUUIDFromBytes(("AAPS-wizard" + carbs.timestamp).toByteArray()).toString(), dateUtil) {
 
     @Expose var units = "mg/dL"
     @Expose var carbInput: Double = 0.toDouble()
@@ -20,8 +19,7 @@ class WizardElement(carbs: CA, dateUtil: DateUtil, iCfg: ICfg) : BaseElement(car
         val fake = BS(
             amount = 0.0001,
             timestamp = carbs.timestamp,
-            type = BS.Type.NORMAL,
-            iCfg = iCfg
+            type = BS.Type.NORMAL
         )
         bolus = BolusElement(fake, dateUtil) // fake insulin record
     }

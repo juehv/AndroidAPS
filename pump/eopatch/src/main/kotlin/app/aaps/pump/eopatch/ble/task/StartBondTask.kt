@@ -12,17 +12,18 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class StartBondTask @Inject constructor() : TaskBase(TaskFunc.START_BOND) {
 
-    @Inject lateinit var startBond: StartBonding
+    private val START_BOND: StartBonding = StartBonding()
 
     fun start(mac: String): Single<Boolean> {
         prefSetMacAddress(mac)
         patch.updateMacAddress(mac, false)
 
         return isReady()
-            .concatMapSingle<BondingResponse>(Function { startBond.start(StartBonding.OPTION_NUMERIC) })
+            .concatMapSingle<BondingResponse>(Function { START_BOND.start(StartBonding.OPTION_NUMERIC) })
             .doOnNext(Consumer { response: BondingResponse -> this.checkResponse(response) })
             .concatMap<Int>(Function { patch.observeBondState() })
             .doOnNext(Consumer { state: Int ->

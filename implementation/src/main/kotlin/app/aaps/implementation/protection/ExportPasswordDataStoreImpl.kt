@@ -53,9 +53,8 @@ class ExportPasswordDataStoreImpl @Inject constructor(
         // Internal constant stings
         const val MODULE = "ExportPasswordDataStore"
 
-        // KeyStore alias for unattended export password. V2 bump forces regeneration so existing users
-        // gain the hardened (StrongBox-backed where supported) key, see SecureEncryptImpl.
-        const val KEYSTORE_ALIAS = "UnattendedExportAliasV2"
+        // KeyStore alias name to use for encrypting
+        const val KEYSTORE_ALIAS = "UnattendedExportAlias"
 
         // Android DataStore: used for keeping password state on local phone storage
         const val DATASTORE_NAME: String = "app.aaps.plugins.configuration.maintenance.ImportExport.datastore"
@@ -224,20 +223,6 @@ class ExportPasswordDataStoreImpl @Inject constructor(
             context.dataStore.edit { settings ->
                 passwordStr = settings[stringPreferencesKey("$keyName.key")] ?: ""
                 timestampStr = (settings[stringPreferencesKey("$keyName.ts")] ?: "")
-            }
-        }
-
-        // Envelope format from SecureEncryptImpl: <sha256>:<alias>:<iv>:<cipher>.
-        // If the stored alias doesn't match the current one, the blob is from a pre-V2 install:
-        // clear it so the empty-password path triggers re-entry and a new hardened key is generated.
-        if (passwordStr.isNotEmpty()) {
-            val aliasInBlob = passwordStr.split(":").getOrNull(1)
-            if (aliasInBlob != null && aliasInBlob != KEYSTORE_ALIAS) {
-                log.info(LTag.CORE, "$MODULE: legacy alias '$aliasInBlob' in stored password, clearing for re-entry with hardened key")
-                clearPassword(context)
-                passwordStr = ""
-                timestampStr = ""
-                secureEncrypt.deleteKey(aliasInBlob)
             }
         }
 

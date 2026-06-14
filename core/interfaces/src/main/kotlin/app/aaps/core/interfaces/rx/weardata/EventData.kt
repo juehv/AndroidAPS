@@ -141,25 +141,13 @@ sealed class EventData : Event() {
     data class ActionUserActionConfirmed(val id: Int, val title: String) : EventData()
 
     @Serializable
-    data class ActionScenePreCheck(val id: String, val title: String) : EventData()
+    data class LoopStatesRequest(val timeStamp: Long) : EventData()
 
     @Serializable
-    data class ActionSceneConfirmed(val id: String, val title: String) : EventData()
+    data class LoopStateSelected(val timeStamp: Long, val index: Int, val duration: Int? = null) : EventData()
 
     @Serializable
-    class ActionSceneStop : EventData()
-
-    @Serializable
-    data class ActiveSceneState(val active: Boolean) : EventData()
-
-    @Serializable
-    data class RunningModeRequest(val timeStamp: Long) : EventData()
-
-    @Serializable
-    data class RunningModeSelected(val timeStamp: Long, val index: Int, val duration: Int? = null) : EventData()
-
-    @Serializable
-    data class RunningModeConfirmed(val timeStamp: Long, val index: Int, val duration: Int? = null) : EventData()
+    data class LoopStateConfirmed(val timeStamp: Long, val index: Int, val duration: Int? = null) : EventData()
 
     @Serializable
     data class ActionHeartRate(
@@ -228,18 +216,15 @@ sealed class EventData : Event() {
     data class OpenLoopRequestConfirmed(val timeStamp: Long) : EventData()
 
     @Serializable
-    data class RunningModeList(val timeStamp: Long, val states: List<AvailableRunningMode>) : EventData() {
-
+    data class LoopStatesList(val timeStamp: Long, val states: List<AvailableLoopState>) : EventData() {
         @Serializable
-        data class AvailableRunningMode(
-            val state: RunningMode,
+        data class AvailableLoopState(
+            val state: LoopState,
             val durations: List<Int>? = null,
             val title: String? = null, // used for FAKE_DIVIDER
         ) {
-
             @Serializable
-            enum class RunningMode {
-
+            enum class LoopState {
                 // See LoopDialog
                 LOOP_OPEN,
                 LOOP_LGS,
@@ -252,7 +237,6 @@ sealed class EventData : Event() {
                 LOOP_RESUME,
 
                 PUMP_DISCONNECT, // 15m, 30m, 1h, 2h, 3h
-                PUMP_RECONNECT,
 
                 // Returned current statuses
                 LOOP_UNKNOWN,
@@ -380,7 +364,6 @@ sealed class EventData : Event() {
         val patientName: String = "",
         val tempTarget: String,
         val tempTargetLevel: Int,
-        val tempTargetDuration: Long = -1L,
         val reservoirString: String,
         val reservoir: Double,
         val reservoirLevel: Int
@@ -411,10 +394,7 @@ sealed class EventData : Event() {
             val buttonText: String,
             val carbs: Int,
             val validFrom: Int,
-            val validTo: Int,
-            val lastUsed: Long = 0L,
-            val mode: Int = 0,
-            val insulin: Double = 0.0
+            val validTo: Int
         ) : EventData()
     }
 
@@ -427,19 +407,6 @@ sealed class EventData : Event() {
         data class UserActionEntry(
             val timeStamp: Long,
             val id: Int,
-            val title: String
-        ) : EventData()
-    }
-
-    @Serializable
-    data class SceneList(
-        val entries: ArrayList<SceneEntry>
-    ) : EventData() {
-
-        @Serializable
-        data class SceneEntry(
-            val timeStamp: Long,
-            val id: String,
             val title: String
         ) : EventData()
     }
@@ -463,42 +430,16 @@ sealed class EventData : Event() {
     data class OpenLoopRequest(val title: String, val message: String, val returnCommand: EventData?) : EventData()
 
     @Serializable // returnCommand is sent back to Mobile after confirmation
-    data class ConfirmAction(
-        val title: String,
-        val message: String,
-        val returnCommand: EventData?,
-        val insulin: Double? = null,
-        val carbs: Int? = null,
-        val carbsTimeShift: Int? = null,
-        val duration: Int? = null,
-        val constraintApplied: Boolean = false,
-        // TempTarget fields
-        val tempTargetLow: Double? = null,
-        val tempTargetHigh: Double? = null,
-        val tempTargetDurationMinutes: Int? = null,
-        val tempTargetIsMGDL: Boolean = true,
-        val isCancelTempTarget: Boolean = false,
-        val tempTargetReason: String? = null,
-        // ProfileSwitch fields
-        val profileName: String? = null,
-        val profilePercentage: Int? = null,
-        val profileTimeshift: Int? = null,
-        val profileDurationMinutes: Int? = null,
-        // RunningMode fields
-        val runningModeTitle: String? = null,
-        val runningModeDurationMinutes: Int? = null,
-        val runningModeType: String? = null,
-    ) : EventData()
+    data class ConfirmAction(val title: String, val message: String, val returnCommand: EventData?) : EventData()
 
     @Serializable
     data class SnoozeAlert(val timeStamp: Long) : EventData()
 
     // Wear -> Wear (workaround)
     @Serializable
-    data class RunningModePreSelect(
+    data class LoopStatePreSelect(
         val timeStamp: Long,
         val stateIndex: Int,
-        val durations: List<Int>,
-        val title: String = ""
+        val durations: List<Int>
     ) : EventData()
 }

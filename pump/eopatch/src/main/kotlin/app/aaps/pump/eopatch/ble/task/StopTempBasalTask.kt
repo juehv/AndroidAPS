@@ -11,10 +11,11 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class StopTempBasalTask @Inject constructor() : TaskBase(TaskFunc.STOP_TEMP_BASAL) {
 
-    @Inject lateinit var tempBasalScheduleStop: TempBasalScheduleStop
+    private val TEMP_BASAL_SCHEDULE_STOP: TempBasalScheduleStop = TempBasalScheduleStop()
 
     fun stop(): Single<PatchBooleanResponse> {
         return isReady().concatMapSingle<PatchBooleanResponse>(Function { stopJob() }).firstOrError()
@@ -22,7 +23,7 @@ class StopTempBasalTask @Inject constructor() : TaskBase(TaskFunc.STOP_TEMP_BASA
     }
 
     fun stopJob(): Single<PatchBooleanResponse> {
-        return tempBasalScheduleStop.stop()
+        return TEMP_BASAL_SCHEDULE_STOP.stop()
             .doOnSuccess(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
             .doOnSuccess(Consumer { onTempBasalCanceled() })
     }

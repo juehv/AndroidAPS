@@ -1,6 +1,6 @@
 package app.aaps.core.interfaces.configuration
 
-import kotlinx.serialization.json.JsonObject
+import org.json.JSONObject
 
 /**
  * Allow export and import plugin configuration
@@ -10,10 +10,10 @@ interface ConfigExportImport {
     /**
      *  Export configuration to JSON
      */
-    fun configuration(): JsonObject
+    fun configuration(): JSONObject
 
     /**
      * Import configuration from JSON and store it
      */
-    fun applyConfiguration(configuration: JsonObject)
+    fun applyConfiguration(configuration: JSONObject)
 }

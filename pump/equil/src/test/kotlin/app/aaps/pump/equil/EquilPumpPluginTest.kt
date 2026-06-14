@@ -2,14 +2,12 @@ package app.aaps.pump.equil
 
 import app.aaps.core.data.pump.defs.ManufacturerType
 import app.aaps.core.data.pump.defs.PumpType
-import app.aaps.core.interfaces.protection.ProtectionCheck
-import app.aaps.core.interfaces.pump.BlePreCheck
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.pump.equil.driver.definition.ActivationProgress
 import app.aaps.pump.equil.manager.EquilManager
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.google.common.truth.Truth.assertThat
 import org.joda.time.DateTime
 import org.joda.time.Duration
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -25,10 +23,8 @@ import org.mockito.kotlin.whenever
 class EquilPumpPluginTest : TestBaseWithProfile() {
 
     @Mock lateinit var commandQueue: CommandQueue
-    @Mock lateinit var equilManager: EquilManager
     @Mock lateinit var pumpSync: PumpSync
-    @Mock lateinit var protectionCheck: ProtectionCheck
-    @Mock lateinit var blePreCheck: BlePreCheck
+    @Mock lateinit var equilManager: EquilManager
 
     private lateinit var equilPumpPlugin: EquilPumpPlugin
 
@@ -36,16 +32,18 @@ class EquilPumpPluginTest : TestBaseWithProfile() {
     fun prepareMocks() {
 
         whenever(rh.gs(anyInt())).thenReturn("")
-        whenever(equilManager.lastConnectionFlow).thenReturn(MutableStateFlow(0L))
-        whenever(equilManager.lastBolusTimeFlow).thenReturn(MutableStateFlow(null))
-        whenever(equilManager.lastBolusAmountFlow).thenReturn(MutableStateFlow(null))
-        whenever(equilManager.reservoirFlow).thenReturn(MutableStateFlow(0.0))
-        whenever(equilManager.batteryFlow).thenReturn(MutableStateFlow(null))
         equilPumpPlugin =
             EquilPumpPlugin(
-                aapsLogger, rh, preferences, commandQueue, rxBus, context,
-                pumpSync, equilManager, pumpEnactResultProvider, constraintsChecker, notificationManager, protectionCheck, blePreCheck
+                aapsLogger, rh, preferences, commandQueue, aapsSchedulers, rxBus, context,
+                fabricPrivacy, pumpSync, equilManager, pumpEnactResultProvider, constraintsChecker
             )
+    }
+
+    @Test
+    fun addPreferenceScreen() {
+        val screen = preferenceManager.createPreferenceScreen(context)
+        equilPumpPlugin.addPreferenceScreen(preferenceManager, screen, context, null)
+        assertThat(screen.preferenceCount).isGreaterThan(0)
     }
 
     @Test
@@ -59,9 +57,8 @@ class EquilPumpPluginTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `isInitialized should delegate to equilManager`() {
-        // Default mock returns false for isActivationCompleted()
-        assertFalse(equilPumpPlugin.isInitialized())
+    fun `isInitialized should return true`() {
+        assertTrue(equilPumpPlugin.isInitialized())
     }
 
     @Test
@@ -164,12 +161,12 @@ class EquilPumpPluginTest : TestBaseWithProfile() {
 
     @Test
     fun `lastBolusTime should return null`() {
-        assertEquals(null, equilPumpPlugin.lastBolusTime.value)
+        assertEquals(null, equilPumpPlugin.lastBolusTime)
     }
 
     @Test
     fun `lastBolusAmount should return null`() {
-        assertEquals(null, equilPumpPlugin.lastBolusAmount.value)
+        assertEquals(null, equilPumpPlugin.lastBolusAmount)
     }
 
     @Test

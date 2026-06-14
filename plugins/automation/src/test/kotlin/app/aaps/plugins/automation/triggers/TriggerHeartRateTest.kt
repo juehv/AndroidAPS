@@ -4,7 +4,6 @@ import app.aaps.core.data.model.HR
 import app.aaps.plugins.automation.R
 import app.aaps.plugins.automation.elements.Comparator
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.verify
@@ -41,14 +40,14 @@ class TriggerHeartRateTest : TriggerTestBase() {
     }
 
     @Test
-    fun shouldRunNotAvailable() = runTest {
+    fun shouldRunNotAvailable() {
         val t = TriggerHeartRate(injector).apply { comparator.value = Comparator.Compare.IS_NOT_AVAILABLE }
         assertThat(t.shouldRun()).isTrue()
         verifyNoMoreInteractions(persistenceLayer)
     }
 
     @Test
-    fun shouldRunNoHeartRate() = runTest {
+    fun shouldRunNoHeartRate() {
         val t = TriggerHeartRate(injector).apply {
             heartRate.value = 100.0
             comparator.value = Comparator.Compare.IS_GREATER
@@ -60,7 +59,7 @@ class TriggerHeartRateTest : TriggerTestBase() {
     }
 
     @Test
-    fun shouldRunBelowThreshold() = runTest {
+    fun shouldRunBelowThreshold() {
         val t = TriggerHeartRate(injector).apply {
             heartRate.value = 100.0
             comparator.value = Comparator.Compare.IS_GREATER
@@ -76,7 +75,7 @@ class TriggerHeartRateTest : TriggerTestBase() {
     }
 
     @Test
-    fun shouldRunTrigger() = runTest {
+    fun shouldRunTrigger() {
         val t = TriggerHeartRate(injector).apply {
             heartRate.value = 100.0
             comparator.value = Comparator.Compare.IS_GREATER

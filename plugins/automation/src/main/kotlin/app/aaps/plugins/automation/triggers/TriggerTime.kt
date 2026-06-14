@@ -1,15 +1,16 @@
 package app.aaps.plugins.automation.triggers
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Schedule
+import android.widget.LinearLayout
 import app.aaps.core.data.time.T
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.utils.JsonHelper
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.InputDateTime
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
+import java.util.Optional
 
 class TriggerTime(injector: HasAndroidInjector) : Trigger(injector) {
 
@@ -29,7 +30,7 @@ class TriggerTime(injector: HasAndroidInjector) : Trigger(injector) {
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
+    override fun shouldRun(): Boolean {
         val now = dateUtil.now()
         if (now >= time.value && now - time.value < T.mins(5).msecs()) {
             aapsLogger.debug(LTag.AUTOMATION, "Ready for execution: " + friendlyDescription())
@@ -54,9 +55,14 @@ class TriggerTime(injector: HasAndroidInjector) : Trigger(injector) {
     override fun friendlyDescription(): String =
         rh.gs(R.string.atspecifiedtime, dateUtil.dateAndTimeString(time.value))
 
-    override fun composeIcon() = Icons.Filled.Schedule
-    override fun composeIconTint() = IconTint.Time
+    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.objects.R.drawable.ic_access_alarm_24dp)
 
     override fun duplicate(): Trigger = TriggerTime(injector, time.value)
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, app.aaps.core.ui.R.string.time, this))
+            .add(time)
+            .build(root)
+    }
 }

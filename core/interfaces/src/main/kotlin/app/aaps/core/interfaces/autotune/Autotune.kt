@@ -2,7 +2,7 @@ package app.aaps.core.interfaces.autotune
 
 interface Autotune {
 
-    suspend fun aapsAutotune(daysBack: Int, autoSwitch: Boolean, profileToTune: String = "", weekDays: BooleanArray? = null)
+    fun aapsAutotune(daysBack: Int, autoSwitch: Boolean, profileToTune: String = "", weekDays: BooleanArray? = null)
     fun atLog(message: String)
 
     var lastRunSuccess: Boolean

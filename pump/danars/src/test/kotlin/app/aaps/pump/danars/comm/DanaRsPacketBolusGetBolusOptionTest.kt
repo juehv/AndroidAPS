@@ -8,7 +8,7 @@ class DanaRsPacketBolusGetBolusOptionTest : DanaRSTestBase() {
 
     @Test
     fun runTest() {
-        val packet = DanaRSPacketBolusGetBolusOption(aapsLogger, notificationManager, danaPump)
+        val packet = DanaRSPacketBolusGetBolusOption(aapsLogger, rxBus, rh, danaPump, uiInteraction)
         // test message decoding
         //if dataArray is 1 pump.isExtendedBolusEnabled should be true
         packet.handleMessage(createArray(21, 1.toByte()))

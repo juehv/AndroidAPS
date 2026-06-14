@@ -3,7 +3,6 @@ package app.aaps.plugins.automation.triggers
 import app.aaps.core.data.model.BS
 import app.aaps.plugins.automation.elements.Comparator
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.json.JSONException
 import org.json.JSONObject
 import org.junit.jupiter.api.Test
@@ -13,14 +12,13 @@ import org.skyscreamer.jsonassert.JSONAssert
 class TriggerBolusAgoTest : TriggerTestBase() {
 
     @Test
-    fun shouldRunTest() = runTest {
+    fun shouldRunTest() {
         // Set last bolus time to now
         whenever(persistenceLayer.getNewestBolusOfType(BS.Type.NORMAL)).thenReturn(
             BS(
                 timestamp = now,
                 amount = 0.0,
-                type = BS.Type.NORMAL,
-                iCfg = someICfg
+                type = BS.Type.NORMAL
             )
         )
         whenever(dateUtil.now()).thenReturn(now + 10 * 60 * 1000) // set current time to now + 10 min
@@ -50,8 +48,7 @@ class TriggerBolusAgoTest : TriggerTestBase() {
             BS(
                 timestamp = 0,
                 amount = 0.0,
-                type = BS.Type.NORMAL,
-                iCfg = someICfg
+                type = BS.Type.NORMAL
             )
         )
         t = TriggerBolusAgo(injector).comparator(Comparator.Compare.IS_NOT_AVAILABLE)
@@ -76,5 +73,9 @@ class TriggerBolusAgoTest : TriggerTestBase() {
         val t2 = TriggerDummy(injector).instantiate(JSONObject(t.toJSON())) as TriggerBolusAgo
         assertThat(t2.comparator.value).isEqualTo(Comparator.Compare.IS_EQUAL)
         assertThat(t2.minutesAgo.value).isEqualTo(410)
+    }
+
+    @Test fun iconTest() {
+        assertThat(TriggerBolusAgo(injector).icon().get()).isEqualTo(app.aaps.core.objects.R.drawable.ic_bolus)
     }
 }

@@ -27,7 +27,7 @@ interface APSResult {
 
     val predictionsAsGv: MutableList<GV>
     val latestPredictionsTime: Long
-    suspend fun isChangeRequested(): Boolean
+    val isChangeRequested: Boolean
     var isTempBasalRequested: Boolean
     val isCarbsRequired: Boolean get() = carbsReq > 0
     val isBolusRequested: Boolean get() = smb > 0.0
@@ -51,9 +51,8 @@ interface APSResult {
 
     val iob: IobTotal? get() = iobData?.get(0)
 
-    suspend fun resultAsString(): String
-    suspend fun resultAsSpanned(): Spanned
-    suspend fun resultAsHtmlString(): String
+    fun resultAsString(): String
+    fun resultAsSpanned(): Spanned
     fun newAndClone(): APSResult
     fun json(): JSONObject?
     fun predictions(): Predictions?

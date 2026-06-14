@@ -35,10 +35,9 @@ class MidnightTimeTest {
     }
 
     @Test fun calcMidnightPlusMinutesTest() {
-        // Use 301 minutes (5:01) to avoid DST spring-forward gap (typically 2:00-3:00)
         val c = Calendar.getInstance()
-        c.timeInMillis = MidnightTime.calcMidnightPlusMinutes(301)
-        assertThat(c[Calendar.HOUR_OF_DAY]).isEqualTo(5)
+        c.timeInMillis = MidnightTime.calcMidnightPlusMinutes(121)
+        assertThat(c[Calendar.HOUR_OF_DAY]).isEqualTo(2)
         assertThat(c[Calendar.MINUTE]).isEqualTo(1)
         assertThat(c[Calendar.SECOND]).isEqualTo(0)
         assertThat(c[Calendar.MILLISECOND]).isEqualTo(0)

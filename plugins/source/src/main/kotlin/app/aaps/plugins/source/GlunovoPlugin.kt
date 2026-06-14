@@ -15,7 +15,6 @@ import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Sources
-import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
@@ -25,11 +24,8 @@ import app.aaps.core.interfaces.source.BgSource
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.ui.compose.icons.IcPluginGlunovo
-import app.aaps.plugins.source.compose.BgSourceComposeContent
 import app.aaps.plugins.source.keys.GlunovoLongKey
 import io.reactivex.rxjava3.disposables.CompositeDisposable
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,26 +34,22 @@ class GlunovoPlugin @Inject constructor(
     resourceHelper: ResourceHelper,
     aapsLogger: AAPSLogger,
     preferences: Preferences,
-    config: Config,
     private val context: Context,
     private val persistenceLayer: PersistenceLayer,
     private val dateUtil: DateUtil,
-    private val fabricPrivacy: FabricPrivacy,
+    private val fabricPrivacy: FabricPrivacy
 ) : AbstractBgSourcePlugin(
     PluginDescription()
         .mainType(PluginType.BGSOURCE)
-        .composeContent { plugin ->
-            BgSourceComposeContent(
-                title = resourceHelper.gs(R.string.glunovo)
-            )
-        }
-        .icon(IcPluginGlunovo)
+        .fragmentClass(BGSourceFragment::class.java.name)
+        .pluginIcon(app.aaps.core.objects.R.drawable.ic_glunovo)
+        .preferencesId(PluginDescription.PREFERENCE_SCREEN)
         .pluginName(R.string.glunovo)
         .shortName(R.string.glunovo)
         .preferencesVisibleInSimpleMode(false)
         .description(R.string.description_source_glunovo),
     ownPreferences = listOf(GlunovoLongKey::class.java),
-    aapsLogger, resourceHelper, preferences, config
+    aapsLogger, resourceHelper, preferences
 ), BgSource {
 
     @VisibleForTesting
@@ -84,13 +76,13 @@ class GlunovoPlugin @Inject constructor(
 
     private val disposable = CompositeDisposable()
 
-    override suspend fun onStart() {
+    override fun onStart() {
         super.onStart()
         handler = Handler(HandlerThread(this::class.java.simpleName + "Handler").also { it.start() }.looper)
         handler?.postDelayed(refreshLoop, T.secs(30).msecs()) // do not start immediately, app may be still starting
     }
 
-    override suspend fun onStop() {
+    override fun onStop() {
         super.onStop()
         handler?.removeCallbacksAndMessages(null)
         handler?.looper?.quit()
@@ -155,7 +147,7 @@ class GlunovoPlugin @Inject constructor(
                 cr.close()
 
                 if (glucoseValues.isNotEmpty() || calibrations.isNotEmpty())
-                    runBlocking { persistenceLayer.insertCgmSourceData(Sources.Glunovo, glucoseValues, calibrations, null) }
+                    persistenceLayer.insertCgmSourceData(Sources.Glunovo, glucoseValues, calibrations, null).blockingGet()
             }
         } catch (e: SecurityException) {
             aapsLogger.error(LTag.CORE, "Exception", e)

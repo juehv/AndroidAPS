@@ -1,6 +1,5 @@
 package app.aaps.plugins.source
 
-import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.shared.tests.TestBase
@@ -15,15 +14,15 @@ class TomatoPluginTest : TestBase() {
 
     @Mock lateinit var rh: ResourceHelper
     @Mock lateinit var preferences: Preferences
-    @Mock lateinit var config: Config
 
     @BeforeEach
     fun setup() {
-        tomatoPlugin = TomatoPlugin(rh, aapsLogger, preferences, config)
+        tomatoPlugin = TomatoPlugin(rh, aapsLogger, preferences)
     }
 
     @Test
-    fun `plugin is created`() {
-        assertThat(tomatoPlugin).isNotNull()
+    fun advancedFilteringSupported() {
+        assertThat(tomatoPlugin.advancedFilteringSupported()).isFalse()
     }
+
 }

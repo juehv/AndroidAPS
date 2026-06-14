@@ -9,7 +9,7 @@ class InsertOrUpdateCarbsTransaction(
     private val carbs: Carbs
 ) : Transaction<InsertOrUpdateCarbsTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
         val current = database.carbsDao.findById(carbs.id)
         if (current == null) {

@@ -1,12 +1,10 @@
 package app.aaps.plugins.sync.nsclient.extensions
 
-import app.aaps.core.data.model.ICfg
 import app.aaps.core.data.model.PS
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.data.time.T
-import app.aaps.core.interfaces.insulin.Insulin
-import app.aaps.core.interfaces.profile.ProfileRepository
+import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.objects.extensions.getCustomizedName
@@ -52,7 +50,7 @@ fun PS.toJson(isAdd: Boolean, dateUtil: DateUtil, decimalFormatter: DecimalForma
    "mgdl":98
 }
  */
-fun PS.Companion.fromJson(jsonObject: JSONObject, dateUtil: DateUtil, profileRepository: ProfileRepository, insulinFallback: Insulin): PS? {
+fun PS.Companion.fromJson(jsonObject: JSONObject, dateUtil: DateUtil, activePlugin: ActivePlugin): PS? {
     val timestamp =
         JsonHelper.safeGetLongAllowNull(jsonObject, "mills", null)
             ?: JsonHelper.safeGetLongAllowNull(jsonObject, "date", null)
@@ -75,19 +73,11 @@ fun PS.Companion.fromJson(jsonObject: JSONObject, dateUtil: DateUtil, profileRep
     if (timestamp == 0L) return null
     val pureProfile =
         if (profileJson == null) { // entered through NS, no JSON attached
-            val store = profileRepository.profile.value ?: return null
+            val profilePlugin = activePlugin.activeProfileSource
+            val store = profilePlugin.profile ?: return null
             store.getSpecificProfile(profileName) ?: return null
         } else pureProfileFromJson(JSONObject(profileJson), dateUtil) ?: return null
     val profileSealed = ProfileSealed.Pure(value = pureProfile, activePlugin = null)
-
-    val insulinLabel = JsonHelper.safeGetStringAllowNull(jsonObject, "insulinLabel", null)
-    val insulinEndTime = JsonHelper.safeGetLongAllowNull(jsonObject, "insulinEndTime")
-    val insulinPeakTime = JsonHelper.safeGetLongAllowNull(jsonObject, "insulinPeakTime")
-    val concentration = JsonHelper.safeGetDoubleAllowNull(jsonObject, "concentration")
-
-    val iCfg =
-        if (insulinLabel != null && insulinEndTime != null && insulinPeakTime != null && concentration != null) ICfg(insulinLabel, insulinEndTime, insulinPeakTime, concentration)
-        else insulinFallback.iCfg
 
     return PS(
         timestamp = timestamp,
@@ -100,7 +90,7 @@ fun PS.Companion.fromJson(jsonObject: JSONObject, dateUtil: DateUtil, profileRep
         timeshift = timeshift,
         percentage = percentage,
         duration = originalDuration ?: T.mins(duration).msecs(),
-        iCfg = iCfg,
+        iCfg = profileSealed.iCfg,
         isValid = isValid
     ).also {
         it.ids.nightscoutId = id

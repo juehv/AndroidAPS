@@ -1,22 +1,15 @@
 package app.aaps.plugins.sync.nsclientV3.extensions
 
 import app.aaps.core.data.model.BS
-import app.aaps.core.data.model.ICfg
 import app.aaps.core.data.model.IDs
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.data.time.T
-import app.aaps.core.interfaces.insulin.Insulin
 import app.aaps.core.nssdk.localmodel.treatment.EventType
 import app.aaps.core.nssdk.localmodel.treatment.NSBolus
-import app.aaps.core.nssdk.localmodel.treatment.NSICfg
 import java.security.InvalidParameterException
 
-fun NSBolus.toBolus(insulinFallback: Insulin): BS {
-    val iCfg =
-        iCfg?.let {
-            ICfg(insulinLabel = it.insulinLabel, insulinEndTime = it.insulinEndTime, insulinPeakTime = it.insulinPeakTime, concentration = it.concentration)
-        } ?: insulinFallback.iCfg
-    return BS(
+fun NSBolus.toBolus(): BS =
+    BS(
         isValid = isValid,
         timestamp = date ?: throw InvalidParameterException(),
         utcOffset = T.mins(utcOffset ?: 0L).msecs(),
@@ -24,10 +17,8 @@ fun NSBolus.toBolus(insulinFallback: Insulin): BS {
         type = type.toBolusType(),
         notes = notes,
         isBasalInsulin = isBasalInsulin,
-        ids = IDs(nightscoutId = identifier, pumpId = pumpId, pumpType = PumpType.fromString(pumpType), pumpSerial = pumpSerial, endId = endId),
-        iCfg = iCfg
+        ids = IDs(nightscoutId = identifier, pumpId = pumpId, pumpType = PumpType.fromString(pumpType), pumpSerial = pumpSerial, endId = endId)
     )
-}
 
 fun NSBolus.BolusType?.toBolusType(): BS.Type =
     BS.Type.fromString(this?.name)
@@ -46,8 +37,7 @@ fun BS.toNSBolus(): NSBolus =
         pumpId = ids.pumpId,
         pumpType = ids.pumpType?.name,
         pumpSerial = ids.pumpSerial,
-        endId = ids.endId,
-        iCfg = NSICfg(insulinLabel = iCfg.insulinLabel, insulinEndTime = iCfg.insulinEndTime, insulinPeakTime = iCfg.insulinPeakTime, concentration = iCfg.concentration)
+        endId = ids.endId
     )
 
 fun BS.Type?.toBolusType(): NSBolus.BolusType =

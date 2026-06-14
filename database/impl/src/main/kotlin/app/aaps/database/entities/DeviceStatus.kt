@@ -13,6 +13,7 @@ import java.util.TimeZone
     tableName = TABLE_DEVICE_STATUS,
     foreignKeys = [],
     indices = [
+        Index("id"),
         Index("nightscoutId"),
         Index("timestamp")
     ]

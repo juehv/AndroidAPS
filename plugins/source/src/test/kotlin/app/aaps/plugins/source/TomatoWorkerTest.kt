@@ -9,7 +9,8 @@ import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -27,6 +28,16 @@ class TomatoWorkerTest : TestBaseWithProfile() {
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var workerParameters: WorkerParameters
 
+    init {
+        addInjector {
+            if (it is TomatoPlugin.TomatoWorker) {
+                it.aapsLogger = aapsLogger
+                it.tomatoPlugin = tomatoPlugin
+                it.persistenceLayer = persistenceLayer
+            }
+        }
+    }
+
     @BeforeEach
     fun setupMock() {
         whenever(workerParameters.inputData).thenReturn(
@@ -35,12 +46,14 @@ class TomatoWorkerTest : TestBaseWithProfile() {
                 "com.fanqies.tomatofn.Extras.BgEstimate" to 150.0
             )
         )
-        worker = TomatoPlugin.TomatoWorker(context, workerParameters, aapsLogger, fabricPrivacy, tomatoPlugin, persistenceLayer)
+        worker = TomatoPlugin.TomatoWorker(context, workerParameters)
+        worker.tomatoPlugin = tomatoPlugin
+        worker.persistenceLayer = persistenceLayer
     }
 
     @Test
     fun `When plugin disabled then do nothing`() {
-        runTest {
+        runBlocking {
             whenever(tomatoPlugin.isEnabled()).thenReturn(false)
 
             val result = worker.doWork()
@@ -52,9 +65,9 @@ class TomatoWorkerTest : TestBaseWithProfile() {
 
     @Test
     fun `When plugin enabled then insert data`() {
-        runTest {
+        runBlocking {
             whenever(tomatoPlugin.isEnabled()).thenReturn(true)
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
+            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
 
             val result = worker.doWork()
 

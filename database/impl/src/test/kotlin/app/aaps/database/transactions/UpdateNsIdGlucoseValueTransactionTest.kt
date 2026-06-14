@@ -5,7 +5,6 @@ import app.aaps.database.daos.GlucoseValueDao
 import app.aaps.database.entities.GlucoseValue
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class UpdateNsIdGlucoseValueTransactionTest {
     }
 
     @Test
-    fun `updates NS ID when different`() = runTest {
+    fun `updates NS ID when different`() {
         val newNsId = "new-ns-123"
         val current = createGlucoseValue(id = 1, nsId = "old-ns")
         val update = createGlucoseValue(id = 1, nsId = newNsId)
@@ -45,7 +44,7 @@ class UpdateNsIdGlucoseValueTransactionTest {
     }
 
     @Test
-    fun `does not update when NS ID is same`() = runTest {
+    fun `does not update when NS ID is same`() {
         val sameNsId = "same-ns"
         val current = createGlucoseValue(id = 1, nsId = sameNsId)
         val update = createGlucoseValue(id = 1, nsId = sameNsId)
@@ -62,7 +61,7 @@ class UpdateNsIdGlucoseValueTransactionTest {
     }
 
     @Test
-    fun `skips when glucose value not found`() = runTest {
+    fun `skips when glucose value not found`() {
         val update = createGlucoseValue(id = 999, nsId = "new-ns")
 
         whenever(glucoseValueDao.findById(999)).thenReturn(null)

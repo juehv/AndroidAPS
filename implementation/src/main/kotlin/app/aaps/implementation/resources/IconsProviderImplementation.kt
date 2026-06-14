@@ -11,7 +11,6 @@ class IconsProviderImplementation @Inject constructor(private val config: Config
 
     override fun getIcon(): Int =
         when {
-            config.AAPSCLIENT3 -> app.aaps.core.ui.R.mipmap.ic_greenowl
             config.AAPSCLIENT2 -> app.aaps.core.ui.R.mipmap.ic_blueowl
             config.AAPSCLIENT1 -> app.aaps.core.ui.R.mipmap.ic_yellowowl
             config.PUMPCONTROL -> app.aaps.core.ui.R.mipmap.ic_pumpcontrol
@@ -22,6 +21,6 @@ class IconsProviderImplementation @Inject constructor(private val config: Config
         when {
             config.AAPSCLIENT  -> R.drawable.ic_notif_nsclient
             config.PUMPCONTROL -> R.drawable.ic_notif_pumpcontrol
-            else               -> app.aaps.core.ui.R.drawable.ic_notif_aaps
+            else               -> app.aaps.core.objects.R.drawable.ic_notif_aaps
         }
 }

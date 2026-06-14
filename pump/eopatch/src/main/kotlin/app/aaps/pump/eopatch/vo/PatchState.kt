@@ -172,7 +172,7 @@ class PatchState : IPreference<PatchState> {
         get() {
             val remainedPumpCycle = remainedPumpCycle()
             return if (remainedPumpCycle > 0) {
-                FloatAdjusters.FLOOR2_INSULIN(
+                FloatAdjusters.FLOOR2_INSULIN.apply(
                     remainedPumpCycle * AppConstant.INSULIN_UNIT_P
                 )
             } else {

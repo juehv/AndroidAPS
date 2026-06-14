@@ -1,5 +1,6 @@
 package app.aaps.plugins.sensitivity
 
+import androidx.preference.PreferenceManager
 import app.aaps.core.interfaces.aps.Sensitivity
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.shared.tests.TestBaseWithProfile
@@ -15,8 +16,9 @@ class SensitivityAAPSPluginTest : TestBaseWithProfile() {
     private lateinit var sensitivityAAPSPlugin: SensitivityAAPSPlugin
 
     @BeforeEach fun prepare() {
+        preferenceManager = PreferenceManager(context)
         sensitivityAAPSPlugin = SensitivityAAPSPlugin(
-            aapsLogger, rh, preferences, profileFunction, dateUtil, persistenceLayer, activePlugin
+            aapsLogger, rh, preferences, profileFunction, dateUtil, persistenceLayer
         )
     }
 
@@ -35,4 +37,10 @@ class SensitivityAAPSPluginTest : TestBaseWithProfile() {
         assertThat(sensitivityAAPSPlugin.id).isEqualTo(Sensitivity.SensitivityType.SENSITIVITY_AAPS)
     }
 
+    @Test
+    fun preferenceScreenTest() {
+        val screen = preferenceManager.createPreferenceScreen(context)
+        sensitivityAAPSPlugin.addPreferenceScreen(preferenceManager, screen, context, null)
+        assertThat(screen.preferenceCount).isGreaterThan(0)
+    }
 }

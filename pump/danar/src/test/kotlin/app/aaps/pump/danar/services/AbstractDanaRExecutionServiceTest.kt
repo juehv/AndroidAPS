@@ -1,34 +1,37 @@
 package app.aaps.pump.danar.services
 
+import android.bluetooth.BluetoothManager
+import android.content.Context
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.profile.Profile
-import app.aaps.core.interfaces.pump.BolusProgressData
 import app.aaps.core.interfaces.pump.DetailedBolusInfo
 import app.aaps.core.interfaces.pump.PumpEnactResult
 import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.pump.dana.DanaPump
 import app.aaps.pump.dana.comm.RecordTypes
-import app.aaps.pump.dana.keys.DanaStringNonKey
+import app.aaps.pump.dana.keys.DanaStringKey
 import app.aaps.pump.danar.comm.MessageHashTableBase
 import app.aaps.pump.danar.comm.MsgBolusStop
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyInt
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mock
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.mockingDetails
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
-import org.mockito.kotlin.any
 
 class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
 
     @Mock lateinit var pumpSync: PumpSync
+    @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var messageHashTable: MessageHashTableBase
+    @Mock lateinit var bluetoothManager: BluetoothManager
     @Mock lateinit var pumpEnactResult: PumpEnactResult
 
     lateinit var danaPump: DanaPump
@@ -37,9 +40,6 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         addInjector { injector ->
             if (injector is MsgBolusStop) {
                 injector.aapsLogger = aapsLogger
-                injector.rh = rh
-                injector.danaPump = danaPump
-                injector.bolusProgressData = BolusProgressData(ch, rh, CoroutineScope(Dispatchers.Unconfined))
             }
         }
     }
@@ -49,8 +49,8 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
     inner class TestDanaRExecutionService : AbstractDanaRExecutionService() {
 
         override fun messageHashTable(): MessageHashTableBase = messageHashTable
-        override suspend fun updateBasalsInPump(profile: Profile): Boolean = true
-        override suspend fun getPumpStatus() {}
+        override fun updateBasalsInPump(profile: Profile): Boolean = true
+        override fun getPumpStatus() {}
         override fun loadEvents(): PumpEnactResult = pumpEnactResult
         override fun bolus(detailedBolusInfo: DetailedBolusInfo): Boolean = true
         override fun highTempBasal(percent: Int, durationInMinutes: Int): Boolean = false
@@ -80,12 +80,9 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.aapsSchedulers = aapsSchedulers
         testService.pumpSync = pumpSync
         testService.activePlugin = activePlugin
-        testService.notificationManager = notificationManager
-        testService.bolusProgressData = BolusProgressData(ch, rh, CoroutineScope(Dispatchers.Unconfined))
+        testService.uiInteraction = uiInteraction
         testService.pumpEnactResultProvider = pumpEnactResultProvider
-        testService.rfcommTransport = mock()
         testService.injector = injector
-        testService.appScope = CoroutineScope(Dispatchers.Unconfined)
     }
 
     @Test
@@ -147,9 +144,9 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun testDoSanityCheck_temporaryBasalMismatch() = runTest {
+    fun testDoSanityCheck_temporaryBasalMismatch() {
         val temporaryBasal = mock(PumpSync.PumpState.TemporaryBasal::class.java)
-        val activePump = mock(app.aaps.core.interfaces.pump.PumpWithConcentration::class.java)
+        val activePump = mock(app.aaps.core.interfaces.pump.Pump::class.java)
 
         `when`(temporaryBasal.rate).thenReturn(150.0)
         `when`(temporaryBasal.timestamp).thenReturn(1000000L)
@@ -170,12 +167,12 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.doSanityCheck()
 
         // Verify that synchronization was attempted
-        assertThat(mockingDetails(notificationManager).invocations.any { it.method.name == "post" }).isTrue()
+        verify(uiInteraction).addNotification(anyInt(), anyString(), anyInt())
     }
 
     @Test
-    fun testDoSanityCheck_noTemporaryBasalInAAPSButInPump() = runTest {
-        val activePump = mock(app.aaps.core.interfaces.pump.PumpWithConcentration::class.java)
+    fun testDoSanityCheck_noTemporaryBasalInAAPSButInPump() {
+        val activePump = mock(app.aaps.core.interfaces.pump.Pump::class.java)
 
         // Create real PumpState for proper destructuring
         val pumpState = PumpSync.PumpState(null, null, null, null, "TEST123")
@@ -193,13 +190,13 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.doSanityCheck()
 
         // Verify notification was added
-        assertThat(mockingDetails(notificationManager).invocations.any { it.method.name == "post" }).isTrue()
+        verify(uiInteraction).addNotification(anyInt(), anyString(), anyInt())
     }
 
     @Test
-    fun testDoSanityCheck_temporaryBasalInAAPSButNotInPump() = runTest {
+    fun testDoSanityCheck_temporaryBasalInAAPSButNotInPump() {
         val temporaryBasal = mock(PumpSync.PumpState.TemporaryBasal::class.java)
-        val activePump = mock(app.aaps.core.interfaces.pump.PumpWithConcentration::class.java)
+        val activePump = mock(app.aaps.core.interfaces.pump.Pump::class.java)
 
         // Set dateUtil.now() first, before checking isTempBasalInProgress
         `when`(dateUtil.now()).thenReturn(2000000L)
@@ -220,13 +217,13 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.doSanityCheck()
 
         // Verify synchronization
-        assertThat(mockingDetails(notificationManager).invocations.any { it.method.name == "post" }).isTrue()
+        verify(uiInteraction).addNotification(anyInt(), anyString(), anyInt())
     }
 
     @Test
-    fun testDoSanityCheck_extendedBolusMismatch() = runTest {
+    fun testDoSanityCheck_extendedBolusMismatch() {
         val extendedBolus = mock(PumpSync.PumpState.ExtendedBolus::class.java)
-        val activePump = mock(app.aaps.core.interfaces.pump.PumpWithConcentration::class.java)
+        val activePump = mock(app.aaps.core.interfaces.pump.Pump::class.java)
 
         // Set dateUtil.now() FIRST to ensure it's available for all property getters
         `when`(dateUtil.now()).thenReturn(1500000L) // Within the extended bolus range
@@ -252,11 +249,11 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.doSanityCheck()
 
         // Verify notification
-        assertThat(mockingDetails(notificationManager).invocations.any { it.method.name == "post" }).isTrue()
+        verify(uiInteraction).addNotification(anyInt(), anyString(), anyInt())
     }
 
     @Test
-    fun testDoSanityCheck_allMatch() = runTest {
+    fun testDoSanityCheck_allMatch() {
         // Create real PumpState for proper destructuring
         val pumpState = PumpSync.PumpState(null, null, null, null, "TEST123")
         `when`(pumpSync.expectedPumpState()).thenReturn(pumpState)
@@ -268,16 +265,17 @@ class AbstractDanaRExecutionServiceTest : TestBaseWithProfile() {
         testService.doSanityCheck()
 
         // Verify no notifications when everything matches
-        assertThat(mockingDetails(notificationManager).invocations.none { it.method.name == "post" }).isTrue()
+        verify(uiInteraction, never()).addNotification(anyInt(), anyString(), anyInt())
     }
 
     @Test
-    fun testGetSocketForSelectedPump_deviceNotFound() {
-        `when`(preferences.get(DanaStringNonKey.RName)).thenReturn("TestPump")
-        `when`(testService.rfcommTransport.getSocketForDevice("TestPump")).thenReturn(null)
+    fun testGetBTSocketForSelectedPump_noBluetoothAdapter() {
+        `when`(preferences.get(DanaStringKey.RName)).thenReturn("TestPump")
+        `when`(context.getSystemService(Context.BLUETOOTH_SERVICE)).thenReturn(bluetoothManager)
+        `when`(bluetoothManager.adapter).thenReturn(null)
 
-        testService.getSocketForSelectedPump()
+        testService.getBTSocketForSelectedPump()
 
-        // Should handle null socket gracefully
+        // Should handle null adapter gracefully
     }
 }

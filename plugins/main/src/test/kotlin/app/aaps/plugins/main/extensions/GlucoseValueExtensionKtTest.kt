@@ -5,16 +5,9 @@ import app.aaps.core.data.model.GV
 import app.aaps.core.data.model.GlucoseUnit
 import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TrendArrow
+import app.aaps.core.objects.R
 import app.aaps.core.objects.extensions.directionToIcon
 import app.aaps.core.objects.extensions.valueToUnits
-import app.aaps.core.ui.compose.icons.IcArrowDoubleDown
-import app.aaps.core.ui.compose.icons.IcArrowDoubleUp
-import app.aaps.core.ui.compose.icons.IcArrowFlat
-import app.aaps.core.ui.compose.icons.IcArrowFortyfiveDown
-import app.aaps.core.ui.compose.icons.IcArrowFortyfiveUp
-import app.aaps.core.ui.compose.icons.IcArrowInvalid
-import app.aaps.core.ui.compose.icons.IcArrowSimpleDown
-import app.aaps.core.ui.compose.icons.IcArrowSimpleUp
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
@@ -37,24 +30,24 @@ class GlucoseValueExtensionKtTest : TestBaseWithProfile() {
 
     @Test
     fun directionToIcon() {
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowFlat)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_flat)
         glucoseValue.trendArrow = TrendArrow.NONE
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowInvalid)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_invalid)
         glucoseValue.trendArrow = TrendArrow.TRIPLE_DOWN
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowInvalid)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_invalid)
         glucoseValue.trendArrow = TrendArrow.TRIPLE_UP
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowInvalid)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_invalid)
         glucoseValue.trendArrow = TrendArrow.DOUBLE_DOWN
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowDoubleDown)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_doubledown)
         glucoseValue.trendArrow = TrendArrow.SINGLE_DOWN
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowSimpleDown)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_singledown)
         glucoseValue.trendArrow = TrendArrow.FORTY_FIVE_DOWN
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowFortyfiveDown)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_fortyfivedown)
         glucoseValue.trendArrow = TrendArrow.FORTY_FIVE_UP
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowFortyfiveUp)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_fortyfiveup)
         glucoseValue.trendArrow = TrendArrow.SINGLE_UP
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowSimpleUp)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_singleup)
         glucoseValue.trendArrow = TrendArrow.DOUBLE_UP
-        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(IcArrowDoubleUp)
+        assertThat(glucoseValue.trendArrow.directionToIcon()).isEqualTo(R.drawable.ic_doubleup)
     }
 }

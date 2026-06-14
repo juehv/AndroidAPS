@@ -5,7 +5,6 @@ import app.aaps.database.daos.FoodDao
 import app.aaps.database.entities.Food
 import app.aaps.database.entities.embedments.InterfaceIDs
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.never
@@ -27,7 +26,7 @@ class UpdateNsIdFoodTransactionTest {
     }
 
     @Test
-    fun `updates NS ID when different`() = runTest {
+    fun `updates NS ID when different`() {
         val newNsId = "new-ns-123"
         val current = createFood(id = 1, nsId = "old-ns")
         val update = createFood(id = 1, nsId = newNsId)
@@ -45,7 +44,7 @@ class UpdateNsIdFoodTransactionTest {
     }
 
     @Test
-    fun `does not update when NS ID is same`() = runTest {
+    fun `does not update when NS ID is same`() {
         val sameNsId = "same-ns"
         val current = createFood(id = 1, nsId = sameNsId)
         val update = createFood(id = 1, nsId = sameNsId)
@@ -62,7 +61,7 @@ class UpdateNsIdFoodTransactionTest {
     }
 
     @Test
-    fun `skips when food not found`() = runTest {
+    fun `skips when food not found`() {
         val update = createFood(id = 999, nsId = "new-ns")
 
         whenever(foodDao.findById(999)).thenReturn(null)

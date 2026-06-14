@@ -1,13 +1,12 @@
 package app.aaps.plugins.source
 
 import app.aaps.core.data.plugin.PluginType
-import app.aaps.core.interfaces.configuration.ExternalOptions
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.pump.VirtualPump
 import app.aaps.core.keys.IntKey
 import app.aaps.shared.tests.TestBaseWithProfile
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
+import com.google.common.truth.Truth.assertThat
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,22 +28,18 @@ class RandomBgPluginTest : TestBaseWithProfile() {
 
     @Test
     fun `When plugin enabled then insert data`() {
-        runTest {
-            whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
-            whenever(persistenceLayer.insertOrUpdateCarbs(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(PersistenceLayer.TransactionResult())
-        }
-        whenever(config.isEnabled(ExternalOptions.UNFINISHED_MODE)).thenReturn(true)
+        whenever(persistenceLayer.insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(persistenceLayer.insertOrUpdateCarbs(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
+        whenever(config.isUnfinishedMode()).thenReturn(true)
         whenever(preferences.get(IntKey.BgSourceRandomInterval)).thenReturn(5)
         randomBgPlugin.setPluginEnabled(PluginType.BGSOURCE, true)
         randomBgPlugin.handleNewData()
 
-        runTest {
-            verify(persistenceLayer).insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
-        }
+        verify(persistenceLayer).insertCgmSourceData(anyOrNull(), anyOrNull(), anyOrNull(), anyOrNull())
     }
 
     @Test
-    fun startStopTest() = runBlocking {
+    fun startStopTest() {
         whenever(preferences.get(IntKey.BgSourceRandomInterval)).thenReturn(5)
         Assertions.assertNull(randomBgPlugin.handler)
         randomBgPlugin.onStart()
@@ -53,4 +48,15 @@ class RandomBgPluginTest : TestBaseWithProfile() {
         Assertions.assertNull(randomBgPlugin.handler)
     }
 
+    @Test
+    fun advancedFilteringSupported() {
+        assertThat(randomBgPlugin.advancedFilteringSupported()).isTrue()
+    }
+
+    @Test
+    fun preferenceScreenTest() {
+        val screen = preferenceManager.createPreferenceScreen(context)
+        randomBgPlugin.addPreferenceScreen(preferenceManager, screen, context, null)
+        assertThat(screen.preferenceCount).isGreaterThan(0)
+    }
 }

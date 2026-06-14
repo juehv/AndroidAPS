@@ -1,7 +1,9 @@
 package app.aaps.shared.tests
 
+import android.content.SharedPreferences
 import android.content.res.Resources
 import android.content.res.TypedArray
+import androidx.preference.PreferenceManager
 import app.aaps.core.data.model.EPS
 import app.aaps.core.data.model.GlucoseUnit
 import app.aaps.core.data.model.ICfg
@@ -11,35 +13,32 @@ import app.aaps.core.interfaces.aps.GlucoseStatus
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.db.ProcessedTbrEbData
-import app.aaps.core.interfaces.insulin.ConcentrationHelper
-import app.aaps.core.interfaces.insulin.Insulin
 import app.aaps.core.interfaces.iob.GlucoseStatusProvider
 import app.aaps.core.interfaces.iob.IobCobCalculator
-import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.profile.ProfileFunction
-import app.aaps.core.interfaces.profile.ProfileRepository
 import app.aaps.core.interfaces.profile.ProfileStore
 import app.aaps.core.interfaces.profile.ProfileUtil
 import app.aaps.core.interfaces.pump.PumpEnactResult
-import app.aaps.core.interfaces.pump.PumpInsulin
-import app.aaps.core.interfaces.pump.PumpRate
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.interfaces.utils.HardLimits
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.StringKey
-import app.aaps.core.keys.interfaces.BooleanNonPreferenceKey
-import app.aaps.core.keys.interfaces.DoubleNonPreferenceKey
-import app.aaps.core.keys.interfaces.IntNonPreferenceKey
-import app.aaps.core.keys.interfaces.LongNonPreferenceKey
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.keys.interfaces.StringNonPreferenceKey
-import app.aaps.core.keys.interfaces.UnitDoublePreferenceKey
 import app.aaps.core.objects.extensions.pureProfileFromJson
 import app.aaps.core.objects.profile.ProfileSealed
 import app.aaps.core.ui.R
+import app.aaps.core.validators.preferences.AdaptiveClickPreference
+import app.aaps.core.validators.preferences.AdaptiveDoublePreference
+import app.aaps.core.validators.preferences.AdaptiveIntPreference
+import app.aaps.core.validators.preferences.AdaptiveIntentPreference
+import app.aaps.core.validators.preferences.AdaptiveListIntPreference
+import app.aaps.core.validators.preferences.AdaptiveListPreference
+import app.aaps.core.validators.preferences.AdaptiveStringPreference
+import app.aaps.core.validators.preferences.AdaptiveSwitchPreference
+import app.aaps.core.validators.preferences.AdaptiveUnitPreference
 import app.aaps.implementation.aps.DetermineBasalResult
 import app.aaps.implementation.profile.ProfileStoreObject
 import app.aaps.implementation.profile.ProfileUtilImpl
@@ -51,13 +50,15 @@ import app.aaps.shared.impl.utils.DateUtilImpl
 import dagger.android.AndroidInjector
 import dagger.android.DaggerApplication
 import dagger.android.HasAndroidInjector
-import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONObject
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.mockito.ArgumentMatchers.anyDouble
 import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mock
+import org.mockito.MockedStatic
+import org.mockito.Mockito
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
@@ -79,12 +80,10 @@ open class TestBaseWithProfile : TestBase() {
     @Mock lateinit var context: DaggerApplication
     @Mock lateinit var preferences: Preferences
     @Mock lateinit var constraintsChecker: ConstraintsChecker
-    @Mock lateinit var notificationManager: NotificationManager
     @Mock lateinit var theme: Resources.Theme
     @Mock lateinit var typedArray: TypedArray
-    @Mock lateinit var profileRepository: ProfileRepository
-    @Mock lateinit var insulin: Insulin
-    @Mock lateinit var ch: ConcentrationHelper
+    @Mock lateinit var sharedPreferences: SharedPreferences
+    @Mock lateinit var sharedPreferencesEditor: SharedPreferences.Editor
 
     lateinit var dateUtil: DateUtil
     lateinit var profileUtil: ProfileUtil
@@ -95,8 +94,6 @@ open class TestBaseWithProfile : TestBase() {
     lateinit var glucoseStatusCalculatorSMB: GlucoseStatusCalculatorSMB
     lateinit var deltaCalculator: DeltaCalculator
     lateinit var apsResultProvider: Provider<APSResult>
-
-    val someICfg = ICfg(insulinLabel = "Fake", insulinEndTime = 9 * 3600 * 1000, insulinPeakTime = 60 * 60 * 1000, concentration = 1.0)
 
     val smbGlucoseStatusProvider = object : GlucoseStatusProvider {
         override val glucoseStatusData: GlucoseStatus?
@@ -113,17 +110,51 @@ open class TestBaseWithProfile : TestBase() {
 
     val injector = HasAndroidInjector {
         AndroidInjector {
+            if (it is AdaptiveDoublePreference) {
+                it.profileUtil = profileUtil
+                it.preferences = preferences
+            }
+            if (it is AdaptiveIntPreference) {
+                it.profileUtil = profileUtil
+                it.preferences = preferences
+                it.config = config
+            }
+            if (it is AdaptiveIntentPreference) {
+                it.preferences = preferences
+            }
+            if (it is AdaptiveUnitPreference) {
+                it.profileUtil = profileUtil
+                it.preferences = preferences
+            }
+            if (it is AdaptiveSwitchPreference) {
+                it.preferences = preferences
+                it.config = config
+            }
+            if (it is AdaptiveStringPreference) {
+                it.preferences = preferences
+            }
+            if (it is AdaptiveListPreference) {
+                it.preferences = preferences
+            }
+            if (it is AdaptiveListIntPreference) {
+                it.preferences = preferences
+            }
+            if (it is AdaptiveClickPreference) {
+                it.preferences = preferences
+            }
             injectors.forEach { fn -> fn(it) }
         }
     }
 
     private lateinit var validProfileJSON: String
     private lateinit var invalidProfileJSON: String
+    lateinit var preferenceManager: PreferenceManager
     lateinit var validProfile: ProfileSealed.Pure
-    lateinit var effectiveProfile: ProfileSealed.EPS
     lateinit var effectiveProfileSwitch: EPS
     lateinit var profileSwitch: PS
     lateinit var testPumpPlugin: TestPumpPlugin
+
+    private lateinit var mockedPreferenceManager: MockedStatic<android.preference.PreferenceManager>
 
     var now = 1656358822000L
 
@@ -131,36 +162,40 @@ open class TestBaseWithProfile : TestBase() {
 
     @BeforeEach
     fun prepareMock() {
-        validProfileJSON = "{\"carbratio\":[{\"time\":\"00:00\",\"value\":\"30\"}],\"carbs_hr\":\"20\",\"delay\":\"20\",\"sens\":[{\"time\":\"00:00\",\"value\":\"3\"}," +
+        validProfileJSON = "{\"dia\":\"5\",\"carbratio\":[{\"time\":\"00:00\",\"value\":\"30\"}],\"carbs_hr\":\"20\",\"delay\":\"20\",\"sens\":[{\"time\":\"00:00\",\"value\":\"3\"}," +
             "{\"time\":\"2:00\",\"value\":\"3.4\"}],\"timezone\":\"UTC\",\"basal\":[{\"time\":\"00:00\",\"value\":\"1\"}],\"target_low\":[{\"time\":\"00:00\",\"value\":\"4.5\"}]," +
             "\"target_high\":[{\"time\":\"00:00\",\"value\":\"7\"}],\"startDate\":\"1970-01-01T00:00:00.000Z\",\"units\":\"mmol\"}"
-        invalidProfileJSON = "{\"carbratio\":[{\"time\":\"00:00\",\"value\":\"200\"}],\"carbs_hr\":\"20\",\"delay\":\"20\",\"sens\":[{\"time\":\"00:00\",\"value\":\"3\"}," +
+        invalidProfileJSON = "{\"dia\":\"1\",\"carbratio\":[{\"time\":\"00:00\",\"value\":\"30\"}],\"carbs_hr\":\"20\",\"delay\":\"20\",\"sens\":[{\"time\":\"00:00\",\"value\":\"3\"}," +
             "{\"time\":\"2:00\",\"value\":\"3.4\"}],\"timezone\":\"UTC\",\"basal\":[{\"time\":\"00:00\",\"value\":\"1\"}],\"target_low\":[{\"time\":\"00:00\",\"value\":\"4.5\"}]," +
             "\"target_high\":[{\"time\":\"00:00\",\"value\":\"7\"}],\"startDate\":\"1970-01-01T00:00:00.000Z\",\"units\":\"mmol\"}"
 
+        // Mock SharedPreferences for AdaptiveListIntPreference
+        whenever(sharedPreferences.getInt(any(), any())).thenReturn(-1)
+        whenever(sharedPreferences.edit()).thenReturn(sharedPreferencesEditor)
+        whenever(sharedPreferencesEditor.remove(any())).thenReturn(sharedPreferencesEditor)
+        whenever(sharedPreferencesEditor.putString(any(), any())).thenReturn(sharedPreferencesEditor)
+
+        // Mock static PreferenceManager.getDefaultSharedPreferences
+        mockedPreferenceManager = Mockito.mockStatic(android.preference.PreferenceManager::class.java)
+        mockedPreferenceManager.`when`<SharedPreferences> {
+            android.preference.PreferenceManager.getDefaultSharedPreferences(any())
+        }.thenReturn(sharedPreferences)
+
+        preferenceManager = PreferenceManager(context)
         dateUtil = spy(DateUtilImpl(context))
         decimalFormatter = DecimalFormatterImpl(rh)
-        profileUtil = ProfileUtilImpl(preferences, decimalFormatter, rh)
+        profileUtil = ProfileUtilImpl(preferences, decimalFormatter)
         testPumpPlugin = TestPumpPlugin(rh)
-        hardLimits = HardLimitsMock(preferences, rh)
         whenever(context.applicationContext).thenReturn(context)
         whenever(context.androidInjector()).thenReturn(injector.androidInjector())
         whenever(context.theme).thenReturn(theme)
         whenever(context.obtainStyledAttributes(anyOrNull(), any(), any(), any())).thenReturn(typedArray)
         whenever(dateUtil.now()).thenReturn(now)
         whenever(activePlugin.activePump).thenReturn(testPumpPlugin)
-        whenever(insulin.iCfg).thenReturn(someICfg)
         whenever(preferences.get(StringKey.GeneralUnits)).thenReturn(GlucoseUnit.MGDL.asText)
-        whenever(preferences.observe(any<BooleanNonPreferenceKey>())).thenReturn(MutableStateFlow(false))
-        whenever(preferences.observe(any<StringNonPreferenceKey>())).thenReturn(MutableStateFlow(""))
-        whenever(preferences.observe(any<DoubleNonPreferenceKey>())).thenReturn(MutableStateFlow(0.0))
-        whenever(preferences.observe(any<UnitDoublePreferenceKey>())).thenReturn(MutableStateFlow(0.0))
-        whenever(preferences.observe(any<IntNonPreferenceKey>())).thenReturn(MutableStateFlow(0))
-        whenever(preferences.observe(any<LongNonPreferenceKey>())).thenReturn(MutableStateFlow(0L))
-        whenever(profileRepository.profiles).thenReturn(MutableStateFlow(emptyList()))
-        whenever(profileRepository.profile).thenReturn(MutableStateFlow(getValidProfileStore()))
         deltaCalculator = DeltaCalculator(aapsLogger)
-        apsResultProvider = Provider { DetermineBasalResult(aapsLogger, constraintsChecker, preferences, activePlugin, processedTbrEbData, profileFunction, rh, decimalFormatter, dateUtil, apsResultProvider, ch) }
+        apsResultProvider = Provider { DetermineBasalResult(aapsLogger, constraintsChecker, preferences, activePlugin, processedTbrEbData, profileFunction, rh, decimalFormatter, dateUtil, apsResultProvider) }
+        hardLimits = HardLimitsMock(preferences, rh)
         validProfile = ProfileSealed.Pure(pureProfileFromJson(JSONObject(validProfileJSON), dateUtil)!!, activePlugin)
         effectiveProfileSwitch = EPS(
             timestamp = dateUtil.now(),
@@ -175,9 +210,8 @@ open class TestBaseWithProfile : TestBase() {
             originalPercentage = 100,
             originalDuration = 0,
             originalEnd = 0,
-            iCfg = someICfg
+            iCfg = ICfg("", 0, 0)
         )
-        effectiveProfile = ProfileSealed.EPS(effectiveProfileSwitch, activePlugin)
         profileSwitch = PS(
             timestamp = dateUtil.now(),
             basalBlocks = validProfile.basalBlocks,
@@ -194,14 +228,6 @@ open class TestBaseWithProfile : TestBase() {
 
         whenever(rh.gs(R.string.ok)).thenReturn("OK")
         whenever(rh.gs(R.string.error)).thenReturn("Error")
-        whenever(rh.gs(R.string.mgdl)).thenReturn("mg/dl")
-        whenever(rh.gs(R.string.mmol)).thenReturn("mmol/l")
-
-        // Default ConcentrationHelper stubs so BolusProgressData.updateProgress() doesn't NPE
-        // when pump tests trigger progress updates with a mocked ch.
-        whenever(ch.bolusProgressString(any<PumpInsulin>(), any<Boolean>())).thenReturn("")
-        whenever(ch.bolusProgressString(any<PumpInsulin>(), any<Double>(), any<Boolean>())).thenReturn("")
-        whenever(ch.fromPump(any<PumpInsulin>(), any<Boolean>())).thenAnswer { it.getArgument<PumpInsulin>(0).cU }
 
         doAnswer { invocation: InvocationOnMock ->
             val string = invocation.getArgument<Int>(0)
@@ -301,16 +327,13 @@ open class TestBaseWithProfile : TestBase() {
             String.format(rh.gs(string), arg1, arg2, arg3)
         }.whenever(rh).gs(anyInt(), anyString(), anyInt(), anyString())
         pumpEnactResultProvider = Provider { PumpEnactResultObject(rh) }
-        profileStoreProvider = Provider { ProfileStoreObject(aapsLogger, activePlugin, config, rh, notificationManager, hardLimits, dateUtil) }
+        profileStoreProvider = Provider { ProfileStoreObject(aapsLogger, activePlugin, config, rh, rxBus, hardLimits, dateUtil) }
         glucoseStatusCalculatorSMB = GlucoseStatusCalculatorSMB(aapsLogger, iobCobCalculator, dateUtil, decimalFormatter, DeltaCalculator(aapsLogger))
+    }
 
-        whenever(ch.bolusProgressString(any<PumpInsulin>(), any<Boolean>())).thenReturn("AnyString")
-        whenever(ch.fromPump(any<PumpRate>())).thenAnswer { invocation ->
-            (invocation.arguments[0] as PumpRate).cU
-        }
-        whenever(ch.fromPump(any<PumpInsulin>(), any<Boolean>())).thenAnswer { invocation ->
-            (invocation.arguments[0] as PumpInsulin).cU
-        }
+    @AfterEach
+    fun cleanupMock() {
+        mockedPreferenceManager.close()
     }
 
     fun getValidProfileStore(): ProfileStore {
@@ -319,7 +342,7 @@ open class TestBaseWithProfile : TestBase() {
         store.put(TESTPROFILENAME, JSONObject(validProfileJSON))
         json.put("defaultProfile", TESTPROFILENAME)
         json.put("store", store)
-        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, notificationManager, hardLimits, dateUtil).with(json)
+        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, rxBus, hardLimits, dateUtil).with(json)
     }
 
     fun getInvalidProfileStore1(): ProfileStore {
@@ -328,7 +351,7 @@ open class TestBaseWithProfile : TestBase() {
         store.put(TESTPROFILENAME, JSONObject(invalidProfileJSON))
         json.put("defaultProfile", TESTPROFILENAME)
         json.put("store", store)
-        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, notificationManager, hardLimits, dateUtil).with(json)
+        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, rxBus, hardLimits, dateUtil).with(json)
     }
 
     fun getInvalidProfileStore2(): ProfileStore {
@@ -338,6 +361,6 @@ open class TestBaseWithProfile : TestBase() {
         store.put("invalid", JSONObject(invalidProfileJSON))
         json.put("defaultProfile", TESTPROFILENAME + "invalid")
         json.put("store", store)
-        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, notificationManager, hardLimits, dateUtil).with(json)
+        return ProfileStoreObject(aapsLogger, activePlugin, config, rh, rxBus, hardLimits, dateUtil).with(json)
     }
 }

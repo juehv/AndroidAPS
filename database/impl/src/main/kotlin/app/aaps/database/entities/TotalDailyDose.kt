@@ -18,7 +18,11 @@ import java.util.TimeZone
         childColumns = ["referenceId"]
     )],
     indices = [
+        Index("id"),
         Index("pumpId"),
+        Index("pumpType"),
+        Index("pumpSerial"),
+        Index("isValid"),
         Index("referenceId"),
         Index("timestamp")
     ]
@@ -37,8 +41,7 @@ data class TotalDailyDose(
     var basalAmount: Double = 0.0,
     var bolusAmount: Double = 0.0,
     var totalAmount: Double = 0.0, // if zero it's calculated as basalAmount + bolusAmount
-    var carbs: Double = 0.0,
-    var carbInsulin: Double = 0.0 // estimated insulin for carbs = sum(carbs / IC at carb time)
+    var carbs: Double = 0.0
 ) : TraceableDBEntry, DBEntryWithTime {
 
     companion object

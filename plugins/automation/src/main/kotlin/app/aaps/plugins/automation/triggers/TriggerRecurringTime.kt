@@ -1,20 +1,21 @@
 package app.aaps.plugins.automation.triggers
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Repeat
+import android.widget.LinearLayout
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.utils.MidnightTime
 import app.aaps.core.ui.elements.WeekDay
 import app.aaps.core.utils.JsonHelper
 import app.aaps.core.utils.MidnightUtils
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.InputTime
 import app.aaps.plugins.automation.elements.InputWeekDay
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.Objects
+import java.util.Optional
 
 class TriggerRecurringTime(injector: HasAndroidInjector) : Trigger(injector) {
 
@@ -32,7 +33,7 @@ class TriggerRecurringTime(injector: HasAndroidInjector) : Trigger(injector) {
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
+    override fun shouldRun(): Boolean {
         val currentMinSinceMidnight = getMinSinceMidnight(dateUtil.now())
         val scheduledDayOfWeek = Calendar.getInstance()[Calendar.DAY_OF_WEEK]
         if (days.isSet(Objects.requireNonNull(WeekDay.DayOfWeek.fromCalendarInt(scheduledDayOfWeek)))) {
@@ -85,8 +86,7 @@ class TriggerRecurringTime(injector: HasAndroidInjector) : Trigger(injector) {
         return if (counter == 0) rh.gs(R.string.never) else sb.toString()
     }
 
-    override fun composeIcon() = Icons.Filled.Repeat
-    override fun composeIconTint() = IconTint.Time
+    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.objects.R.drawable.ic_access_alarm_24dp)
 
     override fun duplicate(): Trigger = TriggerRecurringTime(injector, this)
 
@@ -94,4 +94,11 @@ class TriggerRecurringTime(injector: HasAndroidInjector) : Trigger(injector) {
 
     private fun getMinSinceMidnight(time: Long): Int = MidnightUtils.secondsFromMidnight(time) / 60
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, R.string.recurringTime, this))
+            .add(days)
+            .add(time)
+            .build(root)
+    }
 }

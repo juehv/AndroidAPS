@@ -10,10 +10,8 @@ import androidx.core.content.ContextCompat
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.pump.BlePreCheck
-import app.aaps.core.interfaces.pump.BlePreCheckResult
 import app.aaps.core.interfaces.resources.ResourceHelper
-import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.interfaces.rx.events.EventShowDialog
+import app.aaps.core.ui.dialogs.OKDialog
 import app.aaps.core.utils.extensions.safeEnable
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,7 +20,6 @@ import javax.inject.Singleton
 class BlePreCheckImpl @Inject constructor(
     private val context: Context,
     private val rh: ResourceHelper,
-    private val rxBus: RxBus,
     private val aapsLogger: AAPSLogger
 ) : BlePreCheck {
 
@@ -32,9 +29,10 @@ class BlePreCheckImpl @Inject constructor(
 
     }
 
+
     override fun prerequisitesCheck(activity: AppCompatActivity, additionalPermissions: List<String>?): Boolean {
         if (!activity.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            rxBus.send(EventShowDialog.Ok(title = rh.gs(app.aaps.core.ui.R.string.message), message = rh.gs(app.aaps.core.ui.R.string.ble_not_supported)))
+            OKDialog.show(activity, rh.gs(app.aaps.core.ui.R.string.message), rh.gs(app.aaps.core.ui.R.string.ble_not_supported))
             return false
         } else {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
@@ -45,48 +43,29 @@ class BlePreCheckImpl @Inject constructor(
             }
 
             if (!checkAdditionalPermissions(additionalPermissions, activity)) {
-                return false
+                return false;
             }
 
             val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?)?.adapter
             // Ensures Bluetooth is available on the device and it is enabled.
             bluetoothAdapter?.safeEnable(3000)
             if (bluetoothAdapter?.isEnabled != true) {
-                rxBus.send(EventShowDialog.Ok(title = rh.gs(app.aaps.core.ui.R.string.message), message = rh.gs(app.aaps.core.ui.R.string.ble_not_enabled)))
+                OKDialog.show(activity, rh.gs(app.aaps.core.ui.R.string.message), rh.gs(app.aaps.core.ui.R.string.ble_not_enabled))
                 return false
             }
         }
         return true
     }
 
-    override fun checkBleReady(context: Context): BlePreCheckResult {
-        if (!context.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            return BlePreCheckResult.BLE_NOT_SUPPORTED
-        }
-
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return BlePreCheckResult.PERMISSIONS_MISSING
-        }
-
-        val bluetoothAdapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager?)?.adapter
-        bluetoothAdapter?.safeEnable(3000)
-        if (bluetoothAdapter?.isEnabled != true) {
-            return BlePreCheckResult.BLE_NOT_ENABLED
-        }
-
-        return BlePreCheckResult.READY
-    }
 
     private fun checkAdditionalPermissions(additionalPermissions: List<String>?, activity: AppCompatActivity): Boolean {
 
-        if (additionalPermissions.isNullOrEmpty()) {
+        if (additionalPermissions==null || additionalPermissions.size==0) {
             aapsLogger.debug(LTag.PUMP, "No additional permissions found !")
             return true
         }
 
-        aapsLogger.info(LTag.PUMP, "Additional permissions check (${additionalPermissions.size}): $additionalPermissions")
+        aapsLogger.info(LTag.PUMP, "Additional permissions check (${additionalPermissions.size}): ${additionalPermissions}")
 
         val nonPermittedItems = mutableListOf<String>()
 
@@ -96,12 +75,16 @@ class BlePreCheckImpl @Inject constructor(
             }
         }
 
-        aapsLogger.info(LTag.PUMP, "Non permitted items: $nonPermittedItems")
+        aapsLogger.info(LTag.PUMP, "Non permitted items: ${nonPermittedItems}")
 
-        if (nonPermittedItems.isNotEmpty()) {
+        if (nonPermittedItems.size > 0) {
             ActivityCompat.requestPermissions(activity, nonPermittedItems.toTypedArray(), PERMISSION_REQUEST_BLUETOOTH)
             return false
         }
+
         return true
     }
+
+
+
 }

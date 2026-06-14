@@ -1,16 +1,17 @@
 package app.aaps.plugins.automation.triggers
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Timer
+import android.widget.LinearLayout
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.utils.MidnightTime
 import app.aaps.core.utils.JsonHelper.safeGetInt
 import app.aaps.core.utils.MidnightUtils
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.InputTimeRange
+import app.aaps.plugins.automation.elements.LayoutBuilder
+import app.aaps.plugins.automation.elements.StaticLabel
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
+import java.util.Optional
 
 // Trigger for time range ( from 10:00AM till 13:00PM )
 class TriggerTimeRange(injector: HasAndroidInjector) : Trigger(injector) {
@@ -35,7 +36,7 @@ class TriggerTimeRange(injector: HasAndroidInjector) : Trigger(injector) {
         return this
     }
 
-    override suspend fun shouldRun(): Boolean {
+    override fun shouldRun(): Boolean {
         val currentMinSinceMidnight = getMinSinceMidnight(dateUtil.now())
         var doRun = false
         if (range.start < range.end && range.start < currentMinSinceMidnight && currentMinSinceMidnight < range.end) doRun = true
@@ -65,8 +66,7 @@ class TriggerTimeRange(injector: HasAndroidInjector) : Trigger(injector) {
     override fun friendlyDescription(): String =
         rh.gs(R.string.timerange_value, dateUtil.timeString(toMills(range.start)), dateUtil.timeString(toMills(range.end)))
 
-    override fun composeIcon() = Icons.Filled.Timer
-    override fun composeIconTint() = IconTint.Time
+    override fun icon(): Optional<Int> = Optional.of(app.aaps.core.objects.R.drawable.ic_access_alarm_24dp)
 
     override fun duplicate(): Trigger = TriggerTimeRange(injector, range.start, range.end)
 
@@ -74,4 +74,10 @@ class TriggerTimeRange(injector: HasAndroidInjector) : Trigger(injector) {
 
     private fun getMinSinceMidnight(time: Long): Int = MidnightUtils.secondsFromMidnight(time) / 60
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(StaticLabel(rh, R.string.time_range, this))
+            .add(range)
+            .build(root)
+    }
 }

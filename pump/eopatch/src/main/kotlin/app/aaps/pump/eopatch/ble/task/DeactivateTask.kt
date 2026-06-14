@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class DeactivateTask @Inject constructor(
     private val stopBasalTask: StopBasalTask,
@@ -25,13 +26,13 @@ class DeactivateTask @Inject constructor(
     private val aapsSchedulers: AapsSchedulers
 ) : TaskBase(TaskFunc.DEACTIVATE) {
 
-    @Inject lateinit var deactivation: DeActivation
+    private val DEACTIVATION: DeActivation = DeActivation()
 
     fun run(forced: Boolean, timeout: Long): Single<DeactivationStatus> {
         return isReadyCheckActivated()
             .timeout(timeout, TimeUnit.MILLISECONDS)
             .concatMapSingle<PatchBooleanResponse>(Function {
-                deactivation.start()
+                DEACTIVATION.start()
                     .doOnSuccess(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
                     .observeOn(aapsSchedulers.io)
                     .doOnSuccess(Consumer { onDeactivated() })
@@ -65,7 +66,7 @@ class DeactivateTask @Inject constructor(
 
     private fun onDeactivated() {
         synchronized(lock) {
-            patch.updateMacAddress("", false)
+            patch.updateMacAddress(null, false)
             if (patchConfig.lifecycleEvent.isShutdown) {
                 return
             }

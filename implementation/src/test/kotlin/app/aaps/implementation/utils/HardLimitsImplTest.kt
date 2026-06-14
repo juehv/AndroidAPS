@@ -1,46 +1,39 @@
 package app.aaps.implementation.utils
 
+import android.content.Context
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.notifications.NotificationAction
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationLevel
-import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.HardLimits
 import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.shared.tests.TestBase
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Single
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
-import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class HardLimitsImplTest : TestBase() {
 
-    @Mock lateinit var notificationManager: NotificationManager
+    @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var preferences: Preferences
     @Mock lateinit var rh: ResourceHelper
+    @Mock lateinit var context: Context
     @Mock lateinit var persistenceLayer: PersistenceLayer
     @Mock lateinit var dateUtil: DateUtil
 
-    private val testScope = CoroutineScope(Dispatchers.Unconfined)
     private lateinit var hardLimits: HardLimitsImpl
 
     @BeforeEach
     fun setup() {
-        hardLimits = HardLimitsImpl(aapsLogger, notificationManager, preferences, rh, persistenceLayer, dateUtil, rxBus, testScope)
+        hardLimits = HardLimitsImpl(aapsLogger, uiInteraction, preferences, rh, context, persistenceLayer, dateUtil)
         whenever(dateUtil.now()).thenReturn(1000L)
-        runTest {
-            whenever(persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(any(), any(), any(), any(), any(), any())).thenReturn(PersistenceLayer.TransactionResult())
-        }
+        whenever(persistenceLayer.insertPumpTherapyEventIfNewByTimestamp(any(), any(), any(), any(), any(), any())).thenReturn(Single.just(PersistenceLayer.TransactionResult()))
         whenever(rh.gs(any())).thenReturn("")
         whenever(rh.gs(any(), any())).thenReturn("")
     }
@@ -221,10 +214,8 @@ class HardLimitsImplTest : TestBase() {
     fun `verifyHardLimits logs error and shows notification when value is out of range`() {
         hardLimits.verifyHardLimits(15.0, app.aaps.core.ui.R.string.bolus, 0.0, 10.0)
 
-        verify(notificationManager).post(any<NotificationId>(), any<String>(), any<NotificationLevel>(), any<Int>(), anyOrNull(), any<List<NotificationAction>>(), anyOrNull())
-        runTest {
-            verify(persistenceLayer).insertPumpTherapyEventIfNewByTimestamp(any(), any(), any(), any(), any(), any())
-        }
+        verify(uiInteraction).showToastAndNotification(any(), any(), any())
+        verify(persistenceLayer).insertPumpTherapyEventIfNewByTimestamp(any(), any(), any(), any(), any(), any())
     }
 
     @Test

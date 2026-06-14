@@ -26,7 +26,6 @@ fun EffectiveProfileSwitch.fromDb(): EPS =
         originalPercentage = this.originalPercentage,
         originalDuration = this.originalDuration,
         originalEnd = this.originalEnd,
-        originalPsId = this.originalPsId,
         iCfg = this.insulinConfiguration.fromDb()
     )
 
@@ -51,6 +50,5 @@ fun EPS.toDb(): EffectiveProfileSwitch =
         originalPercentage = this.originalPercentage,
         originalDuration = this.originalDuration,
         originalEnd = this.originalEnd,
-        originalPsId = this.originalPsId,
         insulinConfiguration = this.iCfg.toDb()
     )

@@ -9,6 +9,5 @@ enum class InsightLongNonKey(
 ) : LongNonPreferenceKey {
 
     LastBolusTimestamp("insight_last_bolus_timestamp", 0L),
-    LastTempBasalTimestamp("insight_last_tempbasal_timestamp", 0L),
 }
 

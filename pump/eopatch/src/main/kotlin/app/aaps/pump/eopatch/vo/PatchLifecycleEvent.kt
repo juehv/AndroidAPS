@@ -1,7 +1,7 @@
 package app.aaps.pump.eopatch.vo
 
 import app.aaps.pump.eopatch.code.PatchLifecycle
-import com.google.common.base.Preconditions
+import com.google.android.gms.common.internal.Preconditions
 
 class PatchLifecycleEvent {
 

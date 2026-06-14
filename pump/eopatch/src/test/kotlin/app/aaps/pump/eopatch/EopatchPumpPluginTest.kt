@@ -1,16 +1,12 @@
 package app.aaps.pump.eopatch
 
-import android.Manifest
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.pump.defs.ManufacturerType
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.profile.Profile
-import app.aaps.core.interfaces.protection.ProtectionCheck
-import app.aaps.core.interfaces.pump.BlePreCheck
-import app.aaps.core.interfaces.pump.BolusProgressData
-import app.aaps.core.interfaces.pump.PumpProfile
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.queue.CommandQueue
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.pump.eopatch.core.scan.BleConnectionState
 import app.aaps.pump.eopatch.vo.PatchLifecycleEvent
 import com.google.common.truth.Truth.assertThat
@@ -24,11 +20,9 @@ class EopatchPumpPluginTest : EopatchTestBase() {
 
     @Mock lateinit var commandQueue: CommandQueue
     @Mock lateinit var pumpSync: PumpSync
+    @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var bleConnectionState: BleConnectionState
-    @Mock lateinit var profile: PumpProfile
-    @Mock lateinit var protectionCheck: ProtectionCheck
-    @Mock lateinit var blePreCheck: BlePreCheck
-    @Mock lateinit var bolusProgressData: BolusProgressData
+    @Mock lateinit var profile: Profile
 
     private lateinit var plugin: EopatchPumpPlugin
 
@@ -41,7 +35,7 @@ class EopatchPumpPluginTest : EopatchTestBase() {
         whenever(patchManagerExecutor.patchConnectionState).thenReturn(bleConnectionState)
         whenever(bleConnectionState.isConnected).thenReturn(false)
         whenever(bleConnectionState.isConnecting).thenReturn(false)
-        whenever(eopatchPreferenceManager.patchState).thenReturn(
+        whenever<app.aaps.pump.eopatch.vo.PatchState>(eopatchPreferenceManager.patchState).thenReturn(
             app.aaps.pump.eopatch.vo.PatchState()
         )
 
@@ -52,9 +46,23 @@ class EopatchPumpPluginTest : EopatchTestBase() {
         whenever(profile.getBasal(org.mockito.kotlin.any())).thenReturn(1.0)
 
         plugin = EopatchPumpPlugin(
-            aapsLogger, rh, preferences, commandQueue, aapsSchedulers, fabricPrivacy, dateUtil, pumpSync, patchManager, patchManagerExecutor,
-            alarmManager, eopatchPreferenceManager, notificationManager, pumpEnactResultProvider, patchConfig, normalBasalManager,
-            protectionCheck, blePreCheck, bolusProgressData
+            aapsLogger,
+            rh,
+            preferences,
+            commandQueue,
+            aapsSchedulers,
+            rxBus,
+            fabricPrivacy,
+            dateUtil,
+            pumpSync,
+            patchManager,
+            patchManagerExecutor,
+            alarmManager,
+            eopatchPreferenceManager,
+            uiInteraction,
+            pumpEnactResultProvider,
+            patchConfig,
+            normalBasalManager
         )
     }
 
@@ -104,7 +112,7 @@ class EopatchPumpPluginTest : EopatchTestBase() {
         val bytes = ByteArray(20)
         bytes[4] = 0x04.toByte() // isNormalBasalReg=true (bit 2), isNormalBasalAct=false (bit 4) -> paused
         patchState.update(bytes, System.currentTimeMillis())
-        whenever(eopatchPreferenceManager.patchState).thenReturn(patchState)
+        whenever<app.aaps.pump.eopatch.vo.PatchState>(eopatchPreferenceManager.patchState).thenReturn(patchState)
 
         assertThat(plugin.isSuspended()).isTrue()
     }
@@ -113,7 +121,7 @@ class EopatchPumpPluginTest : EopatchTestBase() {
     fun `isSuspended should return false when basal is not paused`() {
         val patchState = app.aaps.pump.eopatch.vo.PatchState()
         patchState.update(ByteArray(20), System.currentTimeMillis())
-        whenever(eopatchPreferenceManager.patchState).thenReturn(patchState)
+        whenever<app.aaps.pump.eopatch.vo.PatchState>(eopatchPreferenceManager.patchState).thenReturn(patchState)
 
         assertThat(plugin.isSuspended()).isFalse()
     }
@@ -157,14 +165,14 @@ class EopatchPumpPluginTest : EopatchTestBase() {
 
         plugin.connect("test reason")
 
-        assertThat(plugin.lastDataTime.value).isAtLeast(beforeTime)
+        assertThat(plugin.lastDataTime).isAtLeast(beforeTime)
     }
 
     @Test
     fun `baseBasalRate should return 0 when not activated`() {
         patchConfig.lifecycleEvent = PatchLifecycleEvent.createShutdown()
 
-        assertThat(plugin.baseBasalRate.cU).isWithin(0.001).of(0.0)
+        assertThat(plugin.baseBasalRate).isWithin(0.001).of(0.0)
     }
 
     @Test
@@ -174,16 +182,16 @@ class EopatchPumpPluginTest : EopatchTestBase() {
         val bytes = ByteArray(20)
         bytes[4] = 0x04.toByte() // isNormalBasalReg=true (bit 2), isNormalBasalAct=false (bit 4) -> paused
         patchState.update(bytes, System.currentTimeMillis())
-        whenever(eopatchPreferenceManager.patchState).thenReturn(patchState)
+        whenever<app.aaps.pump.eopatch.vo.PatchState>(eopatchPreferenceManager.patchState).thenReturn(patchState)
 
-        assertThat(plugin.baseBasalRate.cU).isWithin(0.001).of(0.0)
+        assertThat(plugin.baseBasalRate).isWithin(0.001).of(0.0)
     }
 
     @Test
     fun `reservoirLevel should return 0 when not activated`() {
         patchConfig.lifecycleEvent = PatchLifecycleEvent.createShutdown()
 
-        assertThat(plugin.reservoirLevel.value.cU).isWithin(0.001).of(0.0)
+        assertThat(plugin.reservoirLevel).isWithin(0.001).of(0.0)
     }
 
     @Test
@@ -193,17 +201,17 @@ class EopatchPumpPluginTest : EopatchTestBase() {
         // Create bytes with remainedInsulin = 50.0f
         val bytes = ByteArray(20)
         patchState.update(bytes, System.currentTimeMillis())
-        whenever(eopatchPreferenceManager.patchState).thenReturn(patchState)
+        whenever<app.aaps.pump.eopatch.vo.PatchState>(eopatchPreferenceManager.patchState).thenReturn(patchState)
 
         // Just verify it returns a value (actual implementation uses patch state)
-        assertThat(plugin.reservoirLevel.value.cU).isAtLeast(0.0)
+        assertThat(plugin.reservoirLevel).isAtLeast(0.0)
     }
 
     @Test
     fun `batteryLevel should return null when not activated`() {
         patchConfig.lifecycleEvent = PatchLifecycleEvent.createShutdown()
 
-        assertThat(plugin.batteryLevel.value).isNull()
+        assertThat(plugin.batteryLevel).isNull()
     }
 
     @Test
@@ -243,18 +251,5 @@ class EopatchPumpPluginTest : EopatchTestBase() {
     @Test
     fun `plugin name should be set`() {
         assertThat(plugin.name).isNotEmpty()
-    }
-
-    @Test
-    fun `requiredPermissions should include bluetooth permissions`() {
-        val allPermissions = plugin.requiredPermissions().flatMap { it.permissions }
-        assertThat(allPermissions).contains(Manifest.permission.BLUETOOTH_CONNECT)
-        assertThat(allPermissions).contains(Manifest.permission.BLUETOOTH_SCAN)
-    }
-
-    @Test
-    fun `requiredPermissions should include SCHEDULE_EXACT_ALARM as special`() {
-        val exactAlarmGroup = plugin.requiredPermissions().first { Manifest.permission.SCHEDULE_EXACT_ALARM in it.permissions }
-        assertThat(exactAlarmGroup.special).isTrue()
     }
 }

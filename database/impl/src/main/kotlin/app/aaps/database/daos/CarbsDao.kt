@@ -5,6 +5,8 @@ import androidx.room.Query
 import app.aaps.database.entities.Carbs
 import app.aaps.database.entities.TABLE_CARBS
 import app.aaps.database.entities.embedments.InterfaceIDs
+import io.reactivex.rxjava3.core.Maybe
+import io.reactivex.rxjava3.core.Single
 
 @Dao
 internal interface CarbsDao : TraceableDao<Carbs> {
@@ -22,42 +24,42 @@ internal interface CarbsDao : TraceableDao<Carbs> {
     override fun deleteTrackedChanges(): Int
 
     @Query("SELECT id FROM $TABLE_CARBS ORDER BY id DESC limit 1")
-    suspend fun getLastId(): Long?
+    fun getLastId(): Long?
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (nightscoutId = :nsId) AND (referenceId IS NULL)")
-    suspend fun getByNSId(nsId: String): Carbs?
+    @Query("SELECT * FROM $TABLE_CARBS WHERE unlikely(nightscoutId = :nsId) AND likely(referenceId IS NULL)")
+    fun getByNSId(nsId: String): Carbs?
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (timestamp = :timestamp) AND (referenceId IS NULL)")
-    suspend fun findByTimestamp(timestamp: Long): Carbs?
+    @Query("SELECT * FROM $TABLE_CARBS WHERE unlikely(timestamp = :timestamp) AND likely(referenceId IS NULL)")
+    fun findByTimestamp(timestamp: Long): Carbs?
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (pumpId = :pumpId) AND (pumpType = :pumpType) AND (pumpSerial = :pumpSerial) AND (referenceId IS NULL)")
+    @Query("SELECT * FROM $TABLE_CARBS WHERE unlikely(pumpId = :pumpId) AND likely(pumpType = :pumpType) AND likely(pumpSerial = :pumpSerial) AND likely(referenceId IS NULL)")
     fun findByPumpIds(pumpId: Long, pumpType: InterfaceIDs.PumpType, pumpSerial: String): Carbs?
 
     @Query("SELECT * FROM $TABLE_CARBS WHERE isValid = 1 AND referenceId IS NULL ORDER BY id DESC LIMIT 1")
-    suspend fun getLastCarbsRecord(): Carbs?
+    fun getLastCarbsRecordMaybe(): Maybe<Carbs>
 
     @Query("SELECT * FROM $TABLE_CARBS WHERE isValid = 1 AND referenceId IS NULL ORDER BY id ASC LIMIT 1")
-    suspend fun getOldestCarbsRecord(): Carbs?
+    fun getOldestCarbsRecord(): Maybe<Carbs>
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (isValid = 1) AND (timestamp >= :timestamp) AND (referenceId IS NULL) ORDER BY id DESC")
-    suspend fun getCarbsFromTime(timestamp: Long): List<Carbs>
+    @Query("SELECT * FROM $TABLE_CARBS WHERE likely(isValid = 1) AND unlikely(timestamp >= :timestamp) AND likely(referenceId IS NULL) ORDER BY id DESC")
+    fun getCarbsFromTime(timestamp: Long): Single<List<Carbs>>
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (isValid = 1) AND ((timestamp + duration) >= :timestamp) AND (referenceId IS NULL) ORDER BY id DESC")
-    suspend fun getCarbsFromTimeExpandable(timestamp: Long): List<Carbs>
+    @Query("SELECT * FROM $TABLE_CARBS WHERE likely(isValid = 1) AND unlikely((timestamp + duration) >= :timestamp) AND likely(referenceId IS NULL) ORDER BY id DESC")
+    fun getCarbsFromTimeExpandable(timestamp: Long): Single<List<Carbs>>
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (isValid = 1) AND ((timestamp + duration) > :from) AND (timestamp <= :to) AND (referenceId IS NULL) ORDER BY id DESC")
-    suspend fun getCarbsFromTimeToTimeExpandable(from: Long, to: Long): List<Carbs>
+    @Query("SELECT * FROM $TABLE_CARBS WHERE likely(isValid = 1) AND unlikely((timestamp + duration) > :from) AND unlikely(timestamp <= :to) AND likely(referenceId IS NULL) ORDER BY id DESC")
+    fun getCarbsFromTimeToTimeExpandable(from: Long, to: Long): Single<List<Carbs>>
 
-    @Query("SELECT * FROM $TABLE_CARBS WHERE (timestamp >= :timestamp) AND (referenceId IS NULL) ORDER BY id DESC")
-    suspend fun getCarbsIncludingInvalidFromTime(timestamp: Long): List<Carbs>
+    @Query("SELECT * FROM $TABLE_CARBS WHERE unlikely(timestamp >= :timestamp) AND likely(referenceId IS NULL) ORDER BY id DESC")
+    fun getCarbsIncludingInvalidFromTime(timestamp: Long): Single<List<Carbs>>
 
     // for WS we need 1 record only
     @Query("SELECT * FROM $TABLE_CARBS WHERE id > :id ORDER BY id ASC limit 1")
-    suspend fun getNextModifiedOrNewAfter(id: Long): Carbs?
+    fun getNextModifiedOrNewAfter(id: Long): Maybe<Carbs>
 
     @Query("SELECT * FROM $TABLE_CARBS WHERE id = :referenceId")
-    suspend fun getCurrentFromHistoric(referenceId: Long): Carbs?
+    fun getCurrentFromHistoric(referenceId: Long): Maybe<Carbs>
 
     @Query("SELECT * FROM $TABLE_CARBS WHERE dateCreated > :since AND dateCreated <= :until LIMIT :limit OFFSET :offset")
-    suspend fun getNewEntriesSince(since: Long, until: Long, limit: Int, offset: Int): List<Carbs>
+    fun getNewEntriesSince(since: Long, until: Long, limit: Int, offset: Int): List<Carbs>
 }

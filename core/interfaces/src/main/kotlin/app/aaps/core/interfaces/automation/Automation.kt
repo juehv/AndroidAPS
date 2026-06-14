@@ -3,8 +3,7 @@ package app.aaps.core.interfaces.automation
 interface Automation {
 
     fun userEvents(): List<AutomationEvent>
-    fun findEventById(id: String): AutomationEvent?
-    suspend fun processEvent(someEvent: AutomationEvent)
+    fun processEvent(someEvent: AutomationEvent)
 
     /**
      * Generate reminder via [app.aaps.plugins.automation.ui.TimerUtil]

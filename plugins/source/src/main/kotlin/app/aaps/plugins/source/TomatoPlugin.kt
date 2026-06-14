@@ -2,7 +2,6 @@ package app.aaps.plugins.source
 
 import android.annotation.SuppressLint
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.aaps.core.data.model.GV
@@ -10,19 +9,13 @@ import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.ue.Sources
-import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.plugin.PluginDescription
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.source.BgSource
-import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.workflow.LoggingWorker
-import app.aaps.core.ui.compose.icons.IcPluginTomato
-import app.aaps.plugins.source.compose.BgSourceComposeContent
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,35 +24,29 @@ import javax.inject.Singleton
 class TomatoPlugin @Inject constructor(
     rh: ResourceHelper,
     aapsLogger: AAPSLogger,
-    preferences: Preferences,
-    config: Config,
+    preferences: Preferences
 ) : AbstractBgSourcePlugin(
     PluginDescription()
         .mainType(PluginType.BGSOURCE)
-        .composeContent { plugin ->
-            BgSourceComposeContent(
-                title = rh.gs(R.string.tomato)
-            )
-        }
-        .icon(IcPluginTomato)
+        .fragmentClass(BGSourceFragment::class.java.name)
+        .pluginIcon(app.aaps.core.objects.R.drawable.ic_sensor)
+        .preferencesId(PluginDescription.PREFERENCE_SCREEN)
         .pluginName(R.string.tomato)
         .shortName(R.string.tomato_short)
         .preferencesVisibleInSimpleMode(false)
         .description(R.string.description_source_tomato),
     ownPreferences = emptyList(),
-    aapsLogger, rh, preferences, config
+    aapsLogger, rh, preferences
 ), BgSource {
 
     // cannot be inner class because of needed injection
-    @HiltWorker
-    class TomatoWorker @AssistedInject constructor(
-        @Assisted context: Context,
-        @Assisted params: WorkerParameters,
-        aapsLogger: AAPSLogger,
-        fabricPrivacy: FabricPrivacy,
-        private val tomatoPlugin: TomatoPlugin,
-        private val persistenceLayer: PersistenceLayer
-    ) : LoggingWorker(context, params, Dispatchers.IO, aapsLogger, fabricPrivacy) {
+    class TomatoWorker(
+        context: Context,
+        params: WorkerParameters
+    ) : LoggingWorker(context, params, Dispatchers.IO) {
+
+        @Inject lateinit var tomatoPlugin: TomatoPlugin
+        @Inject lateinit var persistenceLayer: PersistenceLayer
 
         @SuppressLint("CheckResult")
         override suspend fun doWorkAndLog(): Result {
@@ -75,11 +62,9 @@ class TomatoPlugin @Inject constructor(
                 trendArrow = TrendArrow.NONE,
                 sourceSensor = SourceSensor.LIBRE_1_TOMATO
             )
-            try {
-                persistenceLayer.insertCgmSourceData(Sources.Tomato, glucoseValues, emptyList(), null)
-            } catch (e: Exception) {
-                ret = Result.failure(workDataOf("Error" to e.toString()))
-            }
+            persistenceLayer.insertCgmSourceData(Sources.Tomato, glucoseValues, emptyList(), null)
+                .doOnError { ret = Result.failure(workDataOf("Error" to it.toString())) }
+                .blockingGet()
             return ret
         }
     }

@@ -3,7 +3,6 @@ package app.aaps.pump.equil.manager.command
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.keys.interfaces.Preferences
-import app.aaps.core.utils.notify
 import app.aaps.pump.equil.database.EquilHistoryRecord
 import app.aaps.pump.equil.manager.EquilManager
 import app.aaps.pump.equil.manager.Utils
@@ -45,9 +44,9 @@ class CmdDevicesGet(
         equilManager.setFirmwareVersion(firmwareVersion)
         synchronized(this) {
             cmdSuccess = true
-            notify()
+            (this as Object).notify()
         }
     }
 
-    override fun getEventType(): EquilHistoryRecord.EventType = EquilHistoryRecord.EventType.READ_DEVICES
+    override fun getEventType(): EquilHistoryRecord.EventType? = EquilHistoryRecord.EventType.READ_DEVICES
 }

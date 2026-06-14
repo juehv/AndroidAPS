@@ -6,15 +6,16 @@ import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.wear.R
+import app.aaps.wear.interaction.utils.DisplayFormat
+import app.aaps.wear.interaction.utils.SmallestDoubleString
 import dagger.android.AndroidInjection
 
 /**
  * COB+IOB Complication
  *
  * Shows both carbs on board (COB) and insulin on board (IOB)
- * Text: IOB value
- * Title: COB value
+ * Text: COB value
+ * Title: IOB value (minimized to fit)
  *
  */
 class CobIobComplication : ModernBaseComplicationProviderService() {
@@ -35,13 +36,13 @@ class CobIobComplication : ModernBaseComplicationProviderService() {
         return when (type) {
             ComplicationType.SHORT_TEXT      -> {
                 val cob = statusData.cob
-                val iob = statusData.iobSum + getString(R.string.insulin_unit_short)
+                val iob = SmallestDoubleString(statusData.iobSum, SmallestDoubleString.Units.USE).minimise(DisplayFormat.MAX_FIELD_LEN_SHORT)
 
                 ShortTextComplicationData.Builder(
-                    text = PlainComplicationText.Builder(text = iob).build(),
-                    contentDescription = PlainComplicationText.Builder(text = "IOB $iob COB $cob").build()
+                    text = PlainComplicationText.Builder(text = cob).build(),
+                    contentDescription = PlainComplicationText.Builder(text = "COB $cob IOB $iob").build()
                 )
-                    .setTitle(PlainComplicationText.Builder(text = cob).build())
+                    .setTitle(PlainComplicationText.Builder(text = iob).build())
                     .setTapAction(complicationPendingIntent)
                     .build()
             }

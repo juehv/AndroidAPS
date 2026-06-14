@@ -1,12 +1,10 @@
 package app.aaps.plugins.configuration.setupwizard
 
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import android.annotation.SuppressLint
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.protection.PasswordCheck
 import app.aaps.core.interfaces.resources.ResourceHelper
@@ -14,7 +12,6 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventStatus
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.plugins.configuration.setupwizard.elements.SWItem
-import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers
 import javax.inject.Inject
 
 class SWEventListener @Inject constructor(
@@ -27,12 +24,14 @@ class SWEventListener @Inject constructor(
 
     private var textLabel = 0
     private var status = ""
+    private var textId: Int = 0
     private var visibilityValidator: (() -> Boolean)? = null
 
     lateinit var clazz: Class<out EventStatus>
 
-    fun with(clazz: Class<out EventStatus>): SWEventListener {
+    fun with(clazz: Class<out EventStatus>, swDefinition: SWDefinition): SWEventListener {
         this.clazz = clazz
+        swDefinition.addListener(this)
         return this
     }
 
@@ -51,21 +50,28 @@ class SWEventListener @Inject constructor(
         return this
     }
 
-    @Composable
-    override fun Compose() {
-        if (visibilityValidator?.invoke() == false) return
-        val context = LocalContext.current
-        val statusState = remember { mutableStateOf(status) }
-        DisposableEffect(clazz) {
-            val disposable = rxBus
-                .toObservable(clazz)
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe { event ->
-                    statusState.value = event.getStatus(context)
-                }
-            onDispose { disposable.dispose() }
+    @SuppressLint("SetTextI18n")
+    override fun generateDialog(layout: LinearLayout) {
+        val context = layout.context
+        val textView = TextView(context)
+        textView.id = View.generateViewId()
+        textId = textView.id
+        textView.text = (if (textLabel != 0) rh.gs(textLabel) else "") + " " + status
+        layout.addView(textView)
+    }
+
+    override fun processVisibility(activity: AppCompatActivity) {
+        val textView = activity.findViewById<TextView>(textId)
+        if (visibilityValidator?.invoke() == false) textView?.visibility = View.GONE else textView?.visibility = View.VISIBLE
+    }
+
+    fun updateFromEvent(event: EventStatus, activity: AppCompatActivity) {
+        if (event.javaClass.name == clazz.name) {
+            activity.findViewById<TextView>(textId)?.let { textView ->
+                status = event.getStatus(textView.context!!)
+                @SuppressLint("SetTextI18n")
+                textView.text = (if (textLabel != 0) rh.gs(textLabel) else "") + " " + status
+            }
         }
-        val labelText = if (textLabel != 0) stringResource(textLabel) else ""
-        Text(text = "$labelText ${statusState.value}".trim())
     }
 }

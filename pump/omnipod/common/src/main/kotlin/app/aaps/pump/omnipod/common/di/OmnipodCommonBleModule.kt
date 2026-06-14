@@ -6,12 +6,10 @@ import app.aaps.pump.omnipod.common.bledriver.comm.legacy.LegacyBleConnectionFac
 import app.aaps.pump.omnipod.common.bledriver.comm.legacy.LegacyBleDeviceManager
 import dagger.Binds
 import dagger.Module
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 @Module
-@InstallIn(SingletonComponent::class)
+@Suppress("unused")
 abstract class OmnipodCommonBleModule {
 
     @Binds

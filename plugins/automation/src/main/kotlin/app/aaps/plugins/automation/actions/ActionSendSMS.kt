@@ -1,12 +1,13 @@
 package app.aaps.plugins.automation.actions
 
-import app.aaps.core.interfaces.pump.PumpEnactResult
+import android.widget.LinearLayout
+import app.aaps.core.interfaces.queue.Callback
 import app.aaps.core.interfaces.smsCommunicator.SmsCommunicator
-import app.aaps.core.ui.compose.icons.IcPluginSms
 import app.aaps.core.utils.JsonHelper
 import app.aaps.plugins.automation.R
-import app.aaps.plugins.automation.compose.IconTint
 import app.aaps.plugins.automation.elements.InputString
+import app.aaps.plugins.automation.elements.LabelWithElement
+import app.aaps.plugins.automation.elements.LayoutBuilder
 import dagger.android.HasAndroidInjector
 import org.json.JSONObject
 import javax.inject.Inject
@@ -19,12 +20,11 @@ class ActionSendSMS(injector: HasAndroidInjector) : Action(injector) {
 
     override fun friendlyName(): Int = R.string.sendsmsactiondescription
     override fun shortDescription(): String = rh.gs(R.string.sendsmsactionlabel, text.value)
-    override fun composeIcon() = IcPluginSms
-    override fun composeIconTint() = IconTint.Sms
+    override fun icon(): Int = R.drawable.ic_notifications
 
-    override suspend fun doAction(): PumpEnactResult {
+    override fun doAction(callback: Callback) {
         val result = smsCommunicator.sendNotificationToAllNumbers(text.value)
-        return pumpEnactResultProvider.get().success(result).comment(if (result) app.aaps.core.ui.R.string.ok else app.aaps.core.ui.R.string.error)
+        callback.result(pumpEnactResultProvider.get().success(result).comment(if (result) app.aaps.core.ui.R.string.ok else app.aaps.core.ui.R.string.error)).run()
     }
 
     override fun isValid(): Boolean = text.value.isNotEmpty()
@@ -45,4 +45,9 @@ class ActionSendSMS(injector: HasAndroidInjector) : Action(injector) {
 
     override fun hasDialog(): Boolean = true
 
+    override fun generateDialog(root: LinearLayout) {
+        LayoutBuilder()
+            .add(LabelWithElement(rh, rh.gs(R.string.sendsmsactiontext), "", text))
+            .build(root)
+    }
 }

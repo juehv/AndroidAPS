@@ -7,24 +7,23 @@ import app.aaps.core.interfaces.aps.AutosensDataStore
 import app.aaps.core.interfaces.aps.AutosensResult
 import app.aaps.core.interfaces.aps.IobTotal
 import app.aaps.core.interfaces.aps.MealData
-import app.aaps.core.interfaces.profile.EffectiveProfile
 import app.aaps.core.interfaces.profile.Profile
 
 interface IobCobCalculator {
 
     var ads: AutosensDataStore
 
-    suspend fun getMealDataWithWaitingForCalculationFinish(): MealData
+    fun getMealDataWithWaitingForCalculationFinish(): MealData
     fun getLastAutosensDataWithWaitForCalculationFinish(reason: String): AutosensData?
 
-    suspend fun calculateFromTreatmentsAndTemps(toTime: Long, profile: EffectiveProfile): IobTotal
+    fun calculateFromTreatmentsAndTemps(toTime: Long, profile: Profile): IobTotal
 
-    suspend fun calculateDetectionStart(from: Long, limitDataToOldestAvailable: Boolean): Long
+    fun calculateDetectionStart(from: Long, limitDataToOldestAvailable: Boolean): Long
 
-    suspend fun getBasalData(profile: Profile, fromTime: Long): BasalData
+    fun getBasalData(profile: Profile, fromTime: Long): BasalData
 
-    suspend fun calculateIobArrayInDia(profile: EffectiveProfile): Array<IobTotal>
-    suspend fun calculateIobArrayForSMB(lastAutosensResult: AutosensResult, exerciseMode: Boolean, halfBasalExerciseTarget: Int, isTempTarget: Boolean): Array<IobTotal>
+    fun calculateIobArrayInDia(profile: Profile): Array<IobTotal>
+    fun calculateIobArrayForSMB(lastAutosensResult: AutosensResult, exerciseMode: Boolean, halfBasalExerciseTarget: Int, isTempTarget: Boolean): Array<IobTotal>
     fun iobArrayToString(array: Array<IobTotal>): String
 
     fun clearCache()
@@ -35,7 +34,7 @@ interface IobCobCalculator {
      *  @param reason caller identification
      *  @return CobInfo
      */
-    suspend fun getCobInfo(reason: String): CobInfo
+    fun getCobInfo(reason: String): CobInfo
 
     /**
      * Calculate IobTotal from boluses and extended boluses to now().
@@ -45,7 +44,7 @@ interface IobCobCalculator {
      *
      * @return calculated iob
      */
-    suspend fun calculateIobFromBolus(): IobTotal
+    fun calculateIobFromBolus(): IobTotal
 
     /**
      *  Calculate IOB of base basal insulin (usually not accounted towards IOB)
@@ -53,20 +52,20 @@ interface IobCobCalculator {
      *  @param  toTime
      *  @return IobTotal
      */
-    suspend fun calculateAbsoluteIobFromBaseBasals(toTime: Long): IobTotal
+    fun calculateAbsoluteIobFromBaseBasals(toTime: Long): IobTotal
 
     /**
-     *  Calculate IOB from Temporary basals and Extended boluses (if emulation is enabled) to the time specified
+     *  Calculate IOB from Temporary basals and Extended boluses (if emulation is enabled) to the the time specified
      *
      *  @param  toTime    time to calculate to
      *  @return IobTotal
      */
-    suspend fun calculateIobToTimeFromTempBasalsIncludingConvertedExtended(toTime: Long): IobTotal
+    fun calculateIobToTimeFromTempBasalsIncludingConvertedExtended(toTime: Long): IobTotal
 
     /**
      *  Calculate IOB from Temporary basals and Extended boluses (if emulation is enabled) to now
      *
      *  @return IobTotal
      */
-    suspend fun calculateIobFromTempBasalsIncludingConvertedExtended(): IobTotal
+    fun calculateIobFromTempBasalsIncludingConvertedExtended(): IobTotal
 }

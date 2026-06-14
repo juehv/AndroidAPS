@@ -2,7 +2,6 @@ package app.aaps.plugins.source
 
 import android.annotation.SuppressLint
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.aaps.core.data.configuration.Constants
@@ -12,21 +11,15 @@ import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.data.ue.Sources
-import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.plugin.PluginDescription
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.source.BgSource
-import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.workflow.LoggingWorker
-import app.aaps.core.ui.compose.icons.IcPluginPocTec
 import app.aaps.core.utils.JsonHelper.safeGetString
-import app.aaps.plugins.source.compose.BgSourceComposeContent
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import org.json.JSONArray
 import org.json.JSONException
@@ -37,34 +30,28 @@ import javax.inject.Singleton
 class PoctechPlugin @Inject constructor(
     rh: ResourceHelper,
     aapsLogger: AAPSLogger,
-    preferences: Preferences,
-    config: Config,
+    preferences: Preferences
 ) : AbstractBgSourcePlugin(
     PluginDescription()
         .mainType(PluginType.BGSOURCE)
-        .composeContent { plugin ->
-            BgSourceComposeContent(
-                title = rh.gs(R.string.poctech)
-            )
-        }
-        .icon(IcPluginPocTec)
+        .fragmentClass(BGSourceFragment::class.java.name)
+        .pluginIcon(app.aaps.core.objects.R.drawable.ic_poctech)
+        .preferencesId(PluginDescription.PREFERENCE_SCREEN)
         .pluginName(R.string.poctech)
         .preferencesVisibleInSimpleMode(false)
         .description(R.string.description_source_poctech),
     ownPreferences = emptyList(),
-    aapsLogger, rh, preferences, config
+    aapsLogger, rh, preferences
 ), BgSource {
 
     // cannot be inner class because of needed injection
-    @HiltWorker
-    class PoctechWorker @AssistedInject constructor(
-        @Assisted context: Context,
-        @Assisted params: WorkerParameters,
-        aapsLogger: AAPSLogger,
-        fabricPrivacy: FabricPrivacy,
-        private val poctechPlugin: PoctechPlugin,
-        private val persistenceLayer: PersistenceLayer
-    ) : LoggingWorker(context, params, Dispatchers.IO, aapsLogger, fabricPrivacy) {
+    class PoctechWorker(
+        context: Context,
+        params: WorkerParameters
+    ) : LoggingWorker(context, params, Dispatchers.IO) {
+
+        @Inject lateinit var poctechPlugin: PoctechPlugin
+        @Inject lateinit var persistenceLayer: PersistenceLayer
 
         @SuppressLint("CheckResult")
         override suspend fun doWorkAndLog(): Result {
@@ -88,11 +75,9 @@ class PoctechPlugin @Inject constructor(
                         sourceSensor = SourceSensor.POCTECH_NATIVE
                     )
                 }
-                try {
-                    persistenceLayer.insertCgmSourceData(Sources.PocTech, glucoseValues, emptyList(), null)
-                } catch (e: Exception) {
-                    ret = Result.failure(workDataOf("Error" to e.toString()))
-                }
+                persistenceLayer.insertCgmSourceData(Sources.PocTech, glucoseValues, emptyList(), null)
+                    .doOnError { ret = Result.failure(workDataOf("Error" to it.toString())) }
+                    .blockingGet()
             } catch (e: JSONException) {
                 aapsLogger.error("Exception: ", e)
                 ret = Result.failure(workDataOf("Error" to e.toString()))

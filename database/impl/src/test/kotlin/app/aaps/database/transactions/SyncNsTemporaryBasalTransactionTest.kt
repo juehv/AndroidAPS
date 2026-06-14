@@ -6,7 +6,7 @@ import app.aaps.database.entities.TemporaryBasal
 import app.aaps.database.entities.embedments.InterfaceIDs
 import app.aaps.database.entities.interfaces.end
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.test.runTest
+import io.reactivex.rxjava3.core.Maybe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.verify
@@ -28,11 +28,11 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `inserts new when nsId not found and no active basal`() = runTest {
+    fun `inserts new when nsId not found and no active basal`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", timestamp = 1000L, duration = 60_000L)
 
         whenever(temporaryBasalDao.findByNSId("ns-123")).thenReturn(null)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(null)
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(Maybe.empty())
 
         val transaction = SyncNsTemporaryBasalTransaction(listOf(tb), nsClientMode = false)
         transaction.database = database
@@ -45,12 +45,12 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `updates nsId when active basal at same timestamp`() = runTest {
+    fun `updates nsId when active basal at same timestamp`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", timestamp = 1000L, duration = 60_000L)
         val existing = createTemporaryBasal(id = 1, nsId = null, timestamp = 999L, duration = 60_000L)
 
         whenever(temporaryBasalDao.findByNSId("ns-123")).thenReturn(null)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(existing)
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(Maybe.just(existing))
 
         val transaction = SyncNsTemporaryBasalTransaction(listOf(tb), nsClientMode = false)
         transaction.database = database
@@ -63,12 +63,12 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `ends running basal and inserts new when timestamps differ`() = runTest {
+    fun `ends running basal and inserts new when timestamps differ`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", timestamp = 5000L, duration = 60_000L)
         val existing = createTemporaryBasal(id = 1, nsId = null, timestamp = 1000L, duration = 60_000L)
 
         whenever(temporaryBasalDao.findByNSId("ns-123")).thenReturn(null)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(5000L)).thenReturn(existing)
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(5000L)).thenReturn(Maybe.just(existing))
 
         val transaction = SyncNsTemporaryBasalTransaction(listOf(tb), nsClientMode = false)
         transaction.database = database
@@ -83,7 +83,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `invalidates when valid becomes invalid`() = runTest {
+    fun `invalidates when valid becomes invalid`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", duration = 60_000L, isValid = false)
         val existing = createTemporaryBasal(id = 1, nsId = "ns-123", duration = 60_000L, isValid = true)
 
@@ -98,7 +98,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `updates duration to shorter in NS client mode`() = runTest {
+    fun `updates duration to shorter in NS client mode`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", duration = 30_000L)
         val existing = createTemporaryBasal(id = 1, nsId = "ns-123", duration = 60_000L)
 
@@ -113,7 +113,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `does not update duration to longer in NS client mode`() = runTest {
+    fun `does not update duration to longer in NS client mode`() {
         val tb = createTemporaryBasal(id = 0, nsId = "ns-123", duration = 120_000L)
         val existing = createTemporaryBasal(id = 1, nsId = "ns-123", duration = 60_000L)
 
@@ -128,7 +128,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `finds by pump ids when nsId not found`() = runTest {
+    fun `finds by pump ids when nsId not found`() {
         val tb = createTemporaryBasal(
             id = 0,
             nsId = "ns-123",
@@ -152,7 +152,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `updates nsId when composite key matches but nsId not in DB`() = runTest {
+    fun `updates nsId when composite key matches but nsId not in DB`() {
         val pumpId = 12345L
         val pumpType = InterfaceIDs.PumpType.DANA_I
         val pumpSerial = "ABC123"
@@ -195,7 +195,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `inserts both records when same pumpId but different pumpType`() = runTest {
+    fun `inserts both records when same pumpId but different pumpType`() {
         val pumpId = 12345L
 
         val tb1 = createTemporaryBasal(
@@ -222,8 +222,8 @@ class SyncNsTemporaryBasalTransactionTest {
         whenever(temporaryBasalDao.findByNSId("ns-2")).thenReturn(null)
         whenever(temporaryBasalDao.findByPumpIds(pumpId, InterfaceIDs.PumpType.DANA_I, "DANA-ABC")).thenReturn(null)
         whenever(temporaryBasalDao.findByPumpIds(pumpId, InterfaceIDs.PumpType.MEDTRONIC_522_722, "MEDTRONIC-XYZ")).thenReturn(null)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(null)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(2000L)).thenReturn(null)
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(1000L)).thenReturn(Maybe.empty())
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(2000L)).thenReturn(Maybe.empty())
 
         val transaction = SyncNsTemporaryBasalTransaction(listOf(tb1, tb2), nsClientMode = false)
         transaction.database = database
@@ -236,7 +236,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `ignores duplicate NS record when composite key has different nsId`() = runTest {
+    fun `ignores duplicate NS record when composite key has different nsId`() {
         val pumpId = 12345L
         val pumpType = InterfaceIDs.PumpType.DANA_I
         val pumpSerial = "ABC123"
@@ -278,7 +278,7 @@ class SyncNsTemporaryBasalTransactionTest {
     }
 
     @Test
-    fun `falls back to active check when partial pump data is null`() = runTest {
+    fun `falls back to active check when partial pump data is null`() {
         val nsId = "ns-123"
         val timestamp = 1000L
 
@@ -304,7 +304,7 @@ class SyncNsTemporaryBasalTransactionTest {
 
         whenever(temporaryBasalDao.findByNSId(nsId)).thenReturn(null)
         // Composite key check should NOT be called (null check fails)
-        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(timestamp)).thenReturn(existing)
+        whenever(temporaryBasalDao.getTemporaryBasalActiveAt(timestamp)).thenReturn(Maybe.just(existing))
 
         val transaction = SyncNsTemporaryBasalTransaction(listOf(incoming), nsClientMode = false)
         transaction.database = database

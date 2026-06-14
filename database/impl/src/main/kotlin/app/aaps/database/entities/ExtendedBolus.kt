@@ -18,8 +18,12 @@ import java.util.TimeZone
         childColumns = ["referenceId"]
     )],
     indices = [
+        Index("id"),
+        Index("isValid"),
         Index("endId"),
+        Index("pumpSerial"),
         Index("pumpId"),
+        Index("pumpType"),
         Index("referenceId"),
         Index("timestamp")
     ]

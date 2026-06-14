@@ -7,7 +7,7 @@ class InsertAndCancelCurrentTemporaryTargetTransaction(
     val temporaryTarget: TemporaryTarget
 ) : Transaction<InsertAndCancelCurrentTemporaryTargetTransaction.TransactionResult>() {
 
-    override suspend fun run(): TransactionResult {
+    override fun run(): TransactionResult {
         val result = TransactionResult()
         val current = database.temporaryTargetDao.getTemporaryTargetActiveAtLegacy(temporaryTarget.timestamp)
         if (current != null) {

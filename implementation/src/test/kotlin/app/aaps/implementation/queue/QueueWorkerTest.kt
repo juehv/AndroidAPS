@@ -4,34 +4,24 @@ import android.content.Context
 import android.os.PowerManager
 import androidx.work.ListenableWorker
 import androidx.work.WorkManager
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.aaps.core.data.pump.defs.PumpDescription
-import app.aaps.core.interfaces.alerts.LocalAlertUtils
+import app.aaps.core.interfaces.androidPermissions.AndroidPermission
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.db.PersistenceLayer
-import app.aaps.core.interfaces.pump.BolusProgressData
 import app.aaps.core.interfaces.pump.PumpSync
-import app.aaps.core.interfaces.smsCommunicator.SmsCommunicator
 import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.objects.constraints.ConstraintObject
+import app.aaps.implementation.queue.commands.CommandTempBasalAbsolute
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.yield
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.Mock
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.whenever
-import javax.inject.Provider
 import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 
@@ -39,36 +29,49 @@ class QueueWorkerTest : TestBaseWithProfile() {
 
     @Mock lateinit var constraintChecker: ConstraintsChecker
     @Mock lateinit var powerManager: PowerManager
+    @Mock lateinit var androidPermission: AndroidPermission
     @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var persistenceLayer: PersistenceLayer
-    @Mock lateinit var pumpSync: PumpSync
-    @Mock lateinit var localAlertUtils: LocalAlertUtils
-    private val localAlertUtilsProvider: Provider<LocalAlertUtils> by lazy { Provider { localAlertUtils } }
-    @Mock lateinit var smsCommunicator: SmsCommunicator
-    private val smsCommunicatorProvider: Provider<SmsCommunicator> by lazy { Provider { smsCommunicator } }
     @Mock lateinit var jobName: CommandQueueName
     @Mock lateinit var workManager: WorkManager
 
-    private val testScope = CoroutineScope(Dispatchers.Unconfined)
-    private val bolusProgressData by lazy { BolusProgressData(ch, rh, testScope) }
+    init {
+        addInjector {
+            if (it is CommandTempBasalAbsolute) {
+                it.aapsLogger = aapsLogger
+                it.activePlugin = activePlugin
+                it.rh = rh
+            }
+            if (it is QueueWorker) {
+                it.aapsLogger = aapsLogger
+                it.queue = commandQueue
+                it.context = context
+                it.rxBus = rxBus
+                it.activePlugin = activePlugin
+                it.rh = rh
+                it.preferences = preferences
+                it.androidPermission = androidPermission
+                it.config = config
+            }
+        }
+    }
 
     private lateinit var commandQueue: CommandQueueImplementation
     private lateinit var sut: QueueWorker
 
     @BeforeEach
     fun prepare() {
-        whenever(persistenceLayer.observeChanges(anyOrNull<Class<*>>())).thenReturn(emptyFlow())
         commandQueue = CommandQueueImplementation(
-            aapsLogger, rxBus, rh, constraintChecker,
-            profileFunction, activePlugin, config, dateUtil, fabricPrivacy,
-            uiInteraction, notificationManager, persistenceLayer, decimalFormatter, pumpEnactResultProvider, pumpSync, preferences, localAlertUtilsProvider, smsCommunicatorProvider, jobName, workManager, testScope, bolusProgressData
+            injector, aapsLogger, rxBus, aapsSchedulers, rh, constraintChecker,
+            profileFunction, activePlugin, context, config, dateUtil, fabricPrivacy,
+            uiInteraction, persistenceLayer, decimalFormatter, pumpEnactResultProvider, jobName, workManager
         )
 
         val pumpDescription = PumpDescription()
         pumpDescription.basalMinimumRate = 0.1
 
         whenever(context.getSystemService(Context.POWER_SERVICE)).thenReturn(powerManager)
-        runBlocking { whenever(profileFunction.getProfile()).thenReturn(effectiveProfile) }
+        whenever(profileFunction.getProfile()).thenReturn(validProfile)
 
         val bolusConstraint = ConstraintObject(0.0, aapsLogger)
         whenever(constraintChecker.applyBolusConstraints(anyOrNull())).thenReturn(bolusConstraint)
@@ -82,25 +85,13 @@ class QueueWorkerTest : TestBaseWithProfile() {
             .thenReturn(percentageConstraint)
         whenever(rh.gs(ArgumentMatchers.eq(app.aaps.core.ui.R.string.temp_basal_absolute), anyOrNull(), anyOrNull())).thenReturn("TEMP BASAL %1\$.2f U/h %2\$d min")
 
-        // QueueWorker now uses constructor injection (@HiltWorker). Supply a WorkerFactory that
-        // builds it with the test mocks instead of relying on field injection.
-        sut = TestListenableWorkerBuilder<QueueWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    QueueWorker(
-                        appContext, workerParameters, aapsLogger, fabricPrivacy, commandQueue,
-                        rxBus, activePlugin, rh, preferences, config, bolusProgressData
-                    )
-            })
-            .build()
+        sut = TestListenableWorkerBuilder<QueueWorker>(context).build()
     }
 
     @Test
     fun commandIsPickedUp() = runTest(timeout = 30.seconds) {
-        val tbrJob = launch { commandQueue.tempBasalAbsolute(2.0, 60, true, validProfile, PumpSync.TemporaryBasalType.NORMAL) }
-        yield()
+        commandQueue.tempBasalAbsolute(2.0, 60, true, validProfile, PumpSync.TemporaryBasalType.NORMAL, null)
         val result = sut.doWorkAndLog()
-        tbrJob.join()
         assertIs<ListenableWorker.Result.Success>(result)
         assertThat(commandQueue.size()).isEqualTo(0)
     }

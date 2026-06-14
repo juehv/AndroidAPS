@@ -9,7 +9,7 @@ data class TE(
     override var isValid: Boolean = true,
     override var referenceId: Long? = null,
     override var ids: IDs = IDs(),
-    override var timestamp: Long,
+    var timestamp: Long,
     var utcOffset: Long = TimeZone.getDefault().getOffset(timestamp).toLong(),
     /** Duration in milliseconds */
     var duration: Long = 0,
@@ -21,7 +21,7 @@ data class TE(
     var glucoseUnit: GlucoseUnit,
     var location: Location? = null,
     var arrow: Arrow? = null
-) : HasIDs, TimeStamped {
+) : HasIDs {
 
     fun contentEqualsTo(other: TE): Boolean =
         isValid == other.isValid &&
@@ -117,7 +117,6 @@ data class TE(
 
     @Suppress("unused")
     enum class Location(val text: String, val pump: Boolean = true) {
-
         FRONT_RIGHT_UPPER_CHEST("Front Right Upper Chest", false),
         FRONT_LEFT_UPPER_CHEST("Front Left Upper Chest", false),
         SIDE_RIGHT_UPPER_ARM("Side Right Upper Arm"),
@@ -134,8 +133,6 @@ data class TE(
         FRONT_LEFT_LOWER_ABDOMEN("Front Left Lower Abdomen"),
         BACK_RIGHT_BUTTOCK("Back Right Buttock"),
         BACK_LEFT_BUTTOCK("Back Left Buttock"),
-        BACK_RIGHT_LOWER_BACK("Back Right Lower Back"),
-        BACK_LEFT_LOWER_BACK("Back Left Lower Back"),
         FRONT_RIGHT_UPPER_THIGH("Front Right Upper Thigh"),
         FRONT_LEFT_UPPER_THIGH("Front Left Upper Thigh"),
         FRONT_RIGHT_LOWER_THIGH("Front Right Lower Thigh"),
@@ -146,7 +143,7 @@ data class TE(
         SIDE_LEFT_LOWER_THIGH("Side Left Lower Thigh"),
         NONE("<none>", false);
 
-        companion object {
+        companion object{
 
             fun fromString(text: String?) = Location.entries.firstOrNull { it.text == text } ?: NONE
         }
@@ -154,7 +151,6 @@ data class TE(
 
     @Suppress("unused")
     enum class Arrow(val text: String) {
-
         UP("Up"),
         UP_RIGHT("Up Right"),
         RIGHT("Right"),
@@ -166,7 +162,7 @@ data class TE(
         CENTER("Center"),
         NONE("<none>");
 
-        companion object {
+        companion object{
 
             fun fromString(text: String?) = Arrow.entries.firstOrNull { it.text == text } ?: NONE
         }

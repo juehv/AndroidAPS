@@ -1,9 +1,12 @@
 package app.aaps.pump.medtronic.util
 
-import app.aaps.core.interfaces.notifications.NotificationId
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
+import app.aaps.core.interfaces.ui.UiInteraction
+import app.aaps.core.utils.pump.ByteUtil
 import app.aaps.pump.common.hw.rileylink.RileyLinkUtil
 import app.aaps.pump.common.hw.rileylink.service.RileyLinkServiceData
+import app.aaps.pump.medtronic.MedtronicTestBase
 import app.aaps.pump.medtronic.defs.MedtronicCommandType
 import app.aaps.pump.medtronic.defs.MedtronicDeviceType
 import app.aaps.pump.medtronic.defs.MedtronicNotificationType
@@ -14,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -23,6 +28,7 @@ import org.mockito.kotlin.whenever
 class MedtronicUtilInstanceUTest : TestBaseWithProfile() {
 
     @Mock lateinit var medtronicPumpStatus: MedtronicPumpStatus
+    @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var rileyLinkServiceData: RileyLinkServiceData
     @Mock lateinit var rileyLinkUtil: RileyLinkUtil
     @Mock lateinit var rxBusMock: RxBus
@@ -31,7 +37,7 @@ class MedtronicUtilInstanceUTest : TestBaseWithProfile() {
 
     @BeforeEach
     fun setup() {
-        medtronicUtil = MedtronicUtil(aapsLogger, rxBusMock, rileyLinkUtil, medtronicPumpStatus, notificationManager)
+        medtronicUtil = MedtronicUtil(aapsLogger, rxBusMock, rileyLinkUtil, medtronicPumpStatus, uiInteraction)
     }
 
     // getBolusStrokes tests
@@ -315,12 +321,14 @@ class MedtronicUtilInstanceUTest : TestBaseWithProfile() {
 
     // Notification tests
     @Test
-    fun `test dismissNotification calls notificationManager dismiss`() {
+    fun `test dismissNotification sends event`() {
         val notificationType = MedtronicNotificationType.PumpUnreachable
 
-        medtronicUtil.dismissNotification(notificationType)
+        medtronicUtil.dismissNotification(notificationType, rxBusMock)
 
-        verify(notificationManager).dismiss(any<NotificationId>())
+        val eventCaptor = argumentCaptor<EventDismissNotification>()
+        verify(rxBusMock).send(eventCaptor.capture())
+        assertThat(eventCaptor.firstValue.id).isEqualTo(notificationType.notificationType)
     }
 
     // Settings and time tests

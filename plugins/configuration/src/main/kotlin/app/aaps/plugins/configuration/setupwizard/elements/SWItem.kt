@@ -1,11 +1,15 @@
 package app.aaps.plugins.configuration.setupwizard.elements
 
+import android.view.View
+import android.widget.LinearLayout
 import androidx.annotation.StringRes
-import androidx.compose.runtime.Composable
+import androidx.appcompat.app.AppCompatActivity
 import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.protection.PasswordCheck
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventPreferenceChange
 import app.aaps.core.interfaces.rx.events.EventSWUpdate
 import app.aaps.core.keys.interfaces.PreferenceKey
 import app.aaps.core.keys.interfaces.Preferences
@@ -23,6 +27,7 @@ open class SWItem @Inject constructor(
     val preferences: Preferences,
     val passwordCheck: PasswordCheck
 ) {
+
 
     private var scheduledEventPost: Disposable? = null
 
@@ -48,9 +53,14 @@ open class SWItem @Inject constructor(
         scheduleChange(updateDelay)
     }
 
-    @Composable
-    open fun Compose() {
+    fun generateLayout(view: View): LinearLayout {
+        val layout = view as LinearLayout
+        layout.removeAllViews()
+        return layout
     }
+
+    open fun generateDialog(layout: LinearLayout) {}
+    open fun processVisibility(activity: AppCompatActivity) {}
 
     fun scheduleChange(updateDelay: Long) {
         // cancel waiting task to prevent sending multiple posts
@@ -58,6 +68,8 @@ open class SWItem @Inject constructor(
         scheduledEventPost = Completable
             .timer(updateDelay, TimeUnit.SECONDS)
             .subscribe {
+                aapsLogger.debug(LTag.CORE, "Firing EventPreferenceChange")
+                rxBus.send(EventPreferenceChange(preference?.key ?: ""))
                 rxBus.send(EventSWUpdate(false))
             }
     }

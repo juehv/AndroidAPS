@@ -1,5 +1,7 @@
 package app.aaps.core.interfaces.overview
 
+import android.content.Context
+import androidx.annotation.ColorInt
 import app.aaps.core.data.iob.InMemoryGlucoseValue
 
 /**
@@ -31,6 +33,13 @@ interface LastBgData {
      * @return true if above
      */
     fun isHigh(): Boolean
+
+    /**
+     * Evaluate color based on low - in - high
+     *
+     * @return color as resource
+     */
+    @ColorInt fun lastBgColor(context: Context?): Int
 
     /**
      * Description for a11y

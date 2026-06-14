@@ -1,28 +1,23 @@
 package app.aaps.plugins.sync.nsclientV3.workers
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.nsclient.NSClientRepository
-import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventNSClientNewLog
 import app.aaps.core.objects.workflow.LoggingWorker
+import app.aaps.plugins.sync.nsShared.events.EventNSClientUpdateGuiStatus
 import app.aaps.plugins.sync.nsclientV3.NSClientV3Plugin
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import javax.inject.Inject
 
-@HiltWorker
-class LoadStatusWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
-    aapsLogger: AAPSLogger,
-    fabricPrivacy: FabricPrivacy,
-    private val nsClientV3Plugin: NSClientV3Plugin,
-    private val nsClientRepository: NSClientRepository
-) : LoggingWorker(context, params, Dispatchers.IO, aapsLogger, fabricPrivacy) {
+class LoadStatusWorker(
+    context: Context, params: WorkerParameters
+) : LoggingWorker(context, params, Dispatchers.IO) {
+
+    @Inject lateinit var nsClientV3Plugin: NSClientV3Plugin
+    @Inject lateinit var rxBus: RxBus
 
     override suspend fun doWorkAndLog(): Result {
         val nsAndroidClient = nsClientV3Plugin.nsAndroidClient ?: return Result.failure(workDataOf("Error" to "AndroidClient is null"))
@@ -32,13 +27,13 @@ class LoadStatusWorker @AssistedInject constructor(
             aapsLogger.debug(LTag.NSCLIENT, "STATUS: $status")
         } catch (error: Exception) {
             aapsLogger.error("Error: ", error)
-            nsClientRepository.addLog("◄ ERROR", error.localizedMessage)
+            rxBus.send(EventNSClientNewLog("◄ ERROR", error.localizedMessage))
             nsClientV3Plugin.lastOperationError = error.localizedMessage
-            nsClientRepository.updateStatus(nsClientV3Plugin.status)
+            rxBus.send(EventNSClientUpdateGuiStatus())
             return Result.failure(workDataOf("Error" to error.localizedMessage))
         }
         nsClientV3Plugin.lastOperationError = null
-        nsClientRepository.updateStatus(nsClientV3Plugin.status)
+        rxBus.send(EventNSClientUpdateGuiStatus())
         return Result.success()
     }
 }

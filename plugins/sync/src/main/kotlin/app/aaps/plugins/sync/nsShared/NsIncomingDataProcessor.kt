@@ -9,18 +9,18 @@ import app.aaps.core.data.model.TE
 import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.data.time.T
 import app.aaps.core.interfaces.configuration.Config
-import app.aaps.core.interfaces.insulin.Insulin
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.notifications.NotificationAction
-import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationManager
-import app.aaps.core.interfaces.nsclient.NSClientRepository
+import app.aaps.core.interfaces.notifications.Notification
 import app.aaps.core.interfaces.nsclient.StoreDataForDb
 import app.aaps.core.interfaces.plugin.ActivePlugin
-import app.aaps.core.interfaces.profile.ProfileRepository
+import app.aaps.core.interfaces.profile.ProfileSource
 import app.aaps.core.interfaces.profile.ProfileStore
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventDismissNotification
+import app.aaps.core.interfaces.rx.events.EventNSClientNewLog
 import app.aaps.core.interfaces.source.NSClientSource
+import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.BooleanNonKey
@@ -64,15 +64,14 @@ class NsIncomingDataProcessor @Inject constructor(
     private val aapsLogger: AAPSLogger,
     private val nsClientSource: NSClientSource,
     private val preferences: Preferences,
+    private val rxBus: RxBus,
     private val dateUtil: DateUtil,
     private val activePlugin: ActivePlugin,
-    private val insulin: Insulin,
-    private val profileRepository: ProfileRepository,
     private val storeDataForDb: StoreDataForDb,
     private val config: Config,
     private val profileStoreProvider: Provider<ProfileStore>,
-    private val notificationManager: NotificationManager,
-    private val nsClientRepository: NSClientRepository
+    private val profileSource: ProfileSource,
+    private val uiInteraction: UiInteraction
 ) {
 
     private fun toGv(jsonObject: JSONObject): GV? {
@@ -128,8 +127,8 @@ class NsIncomingDataProcessor @Inject constructor(
             activePlugin.activeNsClient?.updateLatestBgReceivedIfNewer(latestDateInReceivedData)
             // Was that sgv more less 5 mins ago ?
             if (T.msecs(dateUtil.now() - latestDateInReceivedData).mins() < 5L) {
-                notificationManager.dismiss(NotificationId.NS_ALARM)
-                notificationManager.dismiss(NotificationId.NS_URGENT_ALARM)
+                rxBus.send(EventDismissNotification(Notification.NS_ALARM))
+                rxBus.send(EventDismissNotification(Notification.NS_URGENT_ALARM))
             }
             storeDataForDb.addToGlucoseValues(glucoseValues)
         }
@@ -152,7 +151,7 @@ class NsIncomingDataProcessor @Inject constructor(
                 when (treatment) {
                     is NSBolus                  ->
                         if (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT || doFullSync)
-                            storeDataForDb.addToBoluses(treatment.toBolus(insulin))
+                            storeDataForDb.addToBoluses(treatment.toBolus())
 
                     is NSCarbs                  ->
                         if (preferences.get(BooleanKey.NsClientAcceptCarbs) || config.AAPSCLIENT || doFullSync)
@@ -181,14 +180,14 @@ class NsIncomingDataProcessor @Inject constructor(
 
                     is NSEffectiveProfileSwitch ->
                         if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
-                            treatment.toEffectiveProfileSwitch(dateUtil, insulin)?.let { effectiveProfileSwitch ->
+                            treatment.toEffectiveProfileSwitch(dateUtil)?.let { effectiveProfileSwitch ->
                                 storeDataForDb.addToEffectiveProfileSwitches(effectiveProfileSwitch)
                             }
                         }
 
                     is NSProfileSwitch          ->
                         if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
-                            treatment.toProfileSwitch(profileRepository, dateUtil, insulin)?.let { profileSwitch ->
+                            treatment.toProfileSwitch(activePlugin, dateUtil)?.let { profileSwitch ->
                                 storeDataForDb.addToProfileSwitches(profileSwitch)
                             }
                         }
@@ -206,12 +205,15 @@ class NsIncomingDataProcessor @Inject constructor(
                                     preferences.get(BooleanKey.NsClientNotificationsFromAnnouncements) &&
                                     therapyEvent.timestamp + T.mins(60).msecs() > dateUtil.now()
                                 )
-                                    notificationManager.post(
-                                        id = NotificationId.NS_ANNOUNCEMENT,
+                                    uiInteraction.addNotificationWithAction(
+                                        id = Notification.NS_ANNOUNCEMENT,
                                         text = therapyEvent.note ?: "",
-                                        validTo = dateUtil.now() + T.mins(60).msecs(),
-                                        soundRes = app.aaps.core.ui.R.raw.alarm,
-                                        actions = listOf(NotificationAction(app.aaps.core.ui.R.string.snooze) { })
+                                        level = Notification.ANNOUNCEMENT,
+                                        buttonText = app.aaps.core.ui.R.string.snooze,
+                                        action = { },
+                                        validityCheck = null,
+                                        soundId = app.aaps.core.ui.R.raw.alarm,
+                                        validTo = dateUtil.now() + T.mins(60).msecs()
                                     )
                             }
 
@@ -233,7 +235,7 @@ class NsIncomingDataProcessor @Inject constructor(
             return latestDateInReceivedData > 0
         } catch (error: Exception) {
             aapsLogger.error("Error: ", error)
-            nsClientRepository.addLog("◄ ERROR", error.localizedMessage)
+            rxBus.send(EventNSClientNewLog("◄ ERROR", error.localizedMessage))
         }
         return false
     }
@@ -274,26 +276,19 @@ class NsIncomingDataProcessor @Inject constructor(
             storeDataForDb.addToFoods(foods)
         } catch (error: Exception) {
             aapsLogger.error("Error: ", error)
-            nsClientRepository.addLog("◄ ERROR", error.localizedMessage)
+            rxBus.send(EventNSClientNewLog("◄ ERROR", error.localizedMessage))
         }
     }
 
-    suspend fun processProfile(profileJson: JSONObject, doFullSync: Boolean) {
+    fun processProfile(profileJson: JSONObject, doFullSync: Boolean) {
         if (preferences.get(BooleanKey.NsClientAcceptProfileStore) || config.AAPSCLIENT || doFullSync) {
             val store = profileStoreProvider.get().with(profileJson)
             val createdAt = store.getStartDate()
             val lastLocalChange = preferences.get(LongNonKey.LocalProfileLastChange)
             aapsLogger.debug(LTag.PROFILE, "Received profileStore: createdAt: $createdAt Local last modification: $lastLocalChange")
             if (createdAt > lastLocalChange || createdAt % 1000 == 0L) { // whole second means edited in NS
-                // Only acknowledge the profile to NS after a successful import. If the import
-                // fails (storage exception), leave NS believing the profile wasn't synced so it
-                // re-pushes on the next sync round.
-                val result = profileRepository.loadFromNs(store)
-                if (result.isSuccess) {
-                    activePlugin.activeNsClient?.dataSyncSelector?.profileReceived(store.getStartDate())
-                } else {
-                    aapsLogger.error(LTag.PROFILE, "loadFromNs failed; not acknowledging profile to NS", result.exceptionOrNull())
-                }
+                profileSource.loadFromStore(store)
+                activePlugin.activeNsClient?.dataSyncSelector?.profileReceived(store.getStartDate())
                 aapsLogger.debug(LTag.PROFILE, "Received profileStore: $profileJson")
             }
         }

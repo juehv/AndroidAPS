@@ -1,12 +1,9 @@
 package app.aaps.plugins.constraints.objectives
 
 import android.os.SystemClock
-import app.aaps.annotations.OpenForTesting
 import app.aaps.core.interfaces.local.LocaleDependentSetting
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.utils.DateUtil
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -29,7 +26,6 @@ import javax.inject.Singleton
 </pre> *
  */
 @Singleton
-@OpenForTesting
 class SntpClient @Inject constructor(
     private val aapsLogger: AAPSLogger,
     private val dateUtil: DateUtil,
@@ -58,7 +54,7 @@ class SntpClient @Inject constructor(
      * @return time value computed from NTP server response.
      */
     // system time computed from NTP server response
-    protected var ntpTime: Long = 0
+    private var ntpTime: Long = 0
 
     /**
      * Returns the reference clock value (value of SystemClock.elapsedRealtime())
@@ -67,7 +63,7 @@ class SntpClient @Inject constructor(
      * @return reference clock corresponding to the NTP time.
      */
     // value of SystemClock.elapsedRealtime() corresponding to mNtpTime
-    protected var ntpTimeReference: Long = 0
+    private var ntpTimeReference: Long = 0
 
     /**
      * Returns the round trip time of the NTP transaction
@@ -77,25 +73,28 @@ class SntpClient @Inject constructor(
     // round trip time in milliseconds
     private var roundTripTime: Long = 0
 
-    data class NtpResult(
-        val success: Boolean,
-        val networkConnected: Boolean,
-        val time: Long
-    )
+    abstract class Callback : Runnable {
 
-    /**
-     * Suspend version of ntpTime for use in coroutines.
-     */
-    suspend fun ntpTime(isConnected: Boolean): NtpResult = withContext(Dispatchers.IO) {
-        if (!isConnected) {
-            NtpResult(success = false, networkConnected = false, time = 0)
+        var networkConnected = false
+        var success = false
+        var time: Long = 0
+    }
+
+    @Synchronized fun ntpTime(callback: Callback, isConnected: Boolean) {
+        callback.networkConnected = isConnected
+        if (callback.networkConnected) {
+            Thread { doNtpTime(callback) }.start()
         } else {
-            aapsLogger.debug("Time detection started")
-            val success = requestTime(localeDependentSetting.ntpServer, 5000)
-            val time = ntpTime + SystemClock.elapsedRealtime() - ntpTimeReference
-            aapsLogger.debug("Time detection ended: $success ${dateUtil.dateAndTimeString(ntpTime)}")
-            NtpResult(success = success, networkConnected = true, time = time)
+            callback.run()
         }
+    }
+
+    fun doNtpTime(callback: Callback) {
+        aapsLogger.debug("Time detection started")
+        callback.success = requestTime(localeDependentSetting.ntpServer, 5000)
+        callback.time = ntpTime + SystemClock.elapsedRealtime() - ntpTimeReference
+        aapsLogger.debug("Time detection ended: " + callback.success + " " + dateUtil.dateAndTimeString(ntpTime))
+        callback.run()
     }
 
     /**
@@ -106,7 +105,7 @@ class SntpClient @Inject constructor(
      * @return true if the transaction was successful.
      */
     @Suppress("SameParameterValue")
-    @Synchronized protected fun requestTime(host: String, timeout: Int): Boolean {
+    @Synchronized private fun requestTime(host: String, timeout: Int): Boolean {
         try {
             val socket = DatagramSocket()
             socket.soTimeout = timeout

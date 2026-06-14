@@ -1,31 +1,24 @@
 package app.aaps.plugins.sync.nsclientV3.workers
 
-import android.content.Context
 import androidx.work.ListenableWorker
 import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkContinuation
 import androidx.work.WorkManager
-import androidx.work.WorkerFactory
-import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.L
-import app.aaps.core.interfaces.logging.UserEntryLogger
-import app.aaps.core.interfaces.nsclient.NSClientRepository
 import app.aaps.core.interfaces.nsclient.StoreDataForDb
 import app.aaps.core.interfaces.receivers.ReceiverStatusStore
 import app.aaps.core.interfaces.source.NSClientSource
-import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.nssdk.interfaces.NSAndroidClient
 import app.aaps.core.nssdk.remotemodel.LastModified
+import app.aaps.core.utils.receivers.DataWorkerStorage
 import app.aaps.plugins.sync.nsShared.NsIncomingDataProcessor
 import app.aaps.plugins.sync.nsclient.ReceiverDelegate
 import app.aaps.plugins.sync.nsclientV3.DataSyncSelectorV3
 import app.aaps.plugins.sync.nsclientV3.NSClientV3Plugin
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.jupiter.api.BeforeEach
@@ -37,7 +30,6 @@ import org.mockito.Mock
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.verifyBlocking
 import org.mockito.kotlin.whenever
 import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
@@ -54,40 +46,42 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
     @Mock lateinit var nsIncomingDataProcessor: NsIncomingDataProcessor
     @Mock lateinit var l: L
     @Mock lateinit var nsClientSource: NSClientSource
-    @Mock lateinit var nsClientRepository: NSClientRepository
-    @Mock lateinit var uiInteraction: UiInteraction
-    @Mock lateinit var uel: UserEntryLogger
 
     private lateinit var nsClientV3Plugin: NSClientV3Plugin
     private lateinit var receiverDelegate: ReceiverDelegate
+    private lateinit var dataWorkerStorage: DataWorkerStorage
     private lateinit var sut: LoadProfileStoreWorker
 
-    private fun buildSut(): LoadProfileStoreWorker =
-        TestListenableWorkerBuilder<LoadProfileStoreWorker>(context)
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters) =
-                    LoadProfileStoreWorker(appContext, workerParameters, aapsLogger, fabricPrivacy, nsClientV3Plugin, dateUtil, nsIncomingDataProcessor, nsClientRepository)
-            })
-            .build()
+    init {
+        addInjector {
+            if (it is LoadProfileStoreWorker) {
+                it.aapsLogger = aapsLogger
+                it.fabricPrivacy = fabricPrivacy
+                it.rxBus = rxBus
+                it.context = context
+                it.dateUtil = dateUtil
+                it.nsClientV3Plugin = nsClientV3Plugin
+                it.dataWorkerStorage = dataWorkerStorage
+                it.nsIncomingDataProcessor = nsIncomingDataProcessor
+            }
+        }
+    }
 
     @BeforeEach
     fun setUp() {
-        whenever(persistenceLayer.observeChanges(anyOrNull<Class<*>>())).thenReturn(emptyFlow())
-        whenever(persistenceLayer.observeAnyChange()).thenReturn(emptyFlow())
-        whenever(receiverStatusStore.networkStatusFlow).thenReturn(MutableStateFlow(null))
-        whenever(receiverStatusStore.chargingStatusFlow).thenReturn(MutableStateFlow(null))
-        receiverDelegate = ReceiverDelegate(rh, preferences, receiverStatusStore)
+        dataWorkerStorage = DataWorkerStorage(context)
+        receiverDelegate = ReceiverDelegate(rxBus, rh, preferences, receiverStatusStore, aapsSchedulers, fabricPrivacy)
         nsClientV3Plugin = NSClientV3Plugin(
-            aapsLogger, rh, preferences, rxBus, context,
+            aapsLogger, rh, preferences, aapsSchedulers, rxBus, context, fabricPrivacy,
             receiverDelegate, config, dateUtil, dataSyncSelectorV3, persistenceLayer,
-            nsClientSource, storeDataForDb, decimalFormatter, l, nsClientRepository, uel, profileRepository
+            nsClientSource, storeDataForDb, decimalFormatter, l
         )
         nsClientV3Plugin.newestDataOnServer = LastModified(LastModified.Collections())
     }
 
     @Test
     fun `notInitializedAndroidClient returns failure`() = runTest(timeout = 30.seconds) {
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val result = sut.doWorkAndLog()
 
@@ -102,7 +96,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = 0L // First load
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = Long.MAX_VALUE
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile = JSONObject().apply {
             put("defaultProfile", "Default")
@@ -126,7 +120,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000 // Not first load
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile = JSONObject().apply {
             put("defaultProfile", "Default")
@@ -149,7 +143,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile = JSONObject().apply {
             put("defaultProfile", "Default")
@@ -171,7 +165,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile = JSONObject().apply {
             put("defaultProfile", "Default")
@@ -194,7 +188,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val createdAt = dateUtil.toISOString(now - 300)
         val profile = JSONObject().apply {
@@ -218,7 +212,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 1000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now - 2000 // Older than lastLoaded
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val result = sut.doWorkAndLog()
 
@@ -234,7 +228,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         whenever(nsAndroidClient.getProfileModifiedSince(anyLong()))
             .thenReturn(NSAndroidClient.ReadResponse(200, null, emptyList()))
@@ -242,7 +236,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         val result = sut.doWorkAndLog()
 
         assertIs<ListenableWorker.Result.Success>(result)
-        verifyBlocking(nsIncomingDataProcessor, never()) { processProfile(org.mockito.kotlin.any(), anyBoolean()) }
+        verify(nsIncomingDataProcessor, never()).processProfile(org.mockito.kotlin.any(), anyBoolean())
     }
 
     @Test
@@ -252,7 +246,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile1 = JSONObject().apply {
             put("defaultProfile", "Profile1")
@@ -270,12 +264,10 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         val result = sut.doWorkAndLog()
 
         assertIs<ListenableWorker.Result.Success>(result)
-        verifyBlocking(nsIncomingDataProcessor) {
-            processProfile(
-                org.mockito.kotlin.argThat { getString("defaultProfile") == "Profile2" },
-                anyBoolean()
-            )
-        }
+        verify(nsIncomingDataProcessor).processProfile(
+            org.mockito.kotlin.argThat { getString("defaultProfile") == "Profile2" },
+            anyBoolean()
+        )
     }
 
     @Test
@@ -285,7 +277,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.nsAndroidClient = nsAndroidClient
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
         val errorMessage = "Network error"
         whenever(nsAndroidClient.getProfileModifiedSince(anyLong()))
             .thenThrow(RuntimeException(errorMessage))
@@ -304,7 +296,7 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         nsClientV3Plugin.lastLoadedSrvModified.collections.profile = now - 2000
         nsClientV3Plugin.newestDataOnServer?.collections?.profile = now
         nsClientV3Plugin.doingFullSync = true
-        sut = buildSut()
+        sut = TestListenableWorkerBuilder<LoadProfileStoreWorker>(context).build()
 
         val profile = JSONObject().apply {
             put("defaultProfile", "Default")
@@ -316,6 +308,6 @@ internal class LoadProfileStoreWorkerTest : TestBaseWithProfile() {
         val result = sut.doWorkAndLog()
 
         assertIs<ListenableWorker.Result.Success>(result)
-        verifyBlocking(nsIncomingDataProcessor) { processProfile(org.mockito.kotlin.any(), org.mockito.kotlin.eq(true)) }
+        verify(nsIncomingDataProcessor).processProfile(org.mockito.kotlin.any(), org.mockito.kotlin.eq(true))
     }
 }

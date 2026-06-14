@@ -11,14 +11,15 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("PrivatePropertyName")
 @Singleton
 class SetLowReservoirTask @Inject constructor() : TaskBase(TaskFunc.LOW_RESERVOIR) {
 
-    @Inject lateinit var setLowReservoirAndExpireAlert: SetLowReservoirLevelAndExpireAlert
+    private val SET_LOW_RESERVOIR_N_EXPIRE_ALERT: SetLowReservoirLevelAndExpireAlert = SetLowReservoirLevelAndExpireAlert()
 
     fun set(doseUnit: Int, hours: Int): Single<PatchBooleanResponse> {
         return isReady()
-            .concatMapSingle<PatchBooleanResponse>(Function { setLowReservoirAndExpireAlert.set(doseUnit, hours) })
+            .concatMapSingle<PatchBooleanResponse>(Function { SET_LOW_RESERVOIR_N_EXPIRE_ALERT.set(doseUnit, hours) })
             .doOnNext(Consumer { response: PatchBooleanResponse -> this.checkResponse(response) })
             .firstOrError()
             .doOnError(Consumer { e: Throwable -> aapsLogger.error(LTag.PUMPCOMM, e.message ?: "SetLowReservoirTask error") })

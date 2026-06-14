@@ -6,7 +6,7 @@ import app.aaps.plugins.aps.utils.StaticInjector
 import org.mozilla.javascript.ScriptableObject
 import javax.inject.Inject
 
-@Suppress("unused")
+@Suppress("unused", "FunctionName")
 class LoggerCallback : ScriptableObject() {
 
     @Inject lateinit var aapsLogger: AAPSLogger
