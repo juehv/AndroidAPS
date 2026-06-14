@@ -32,6 +32,7 @@ import app.aaps.core.interfaces.queue.CustomCommand
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.AapsSchedulers
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventProfileChangeRequested
 import app.aaps.core.interfaces.rx.events.EventRefreshOverview
 import app.aaps.core.interfaces.ui.UiInteraction
@@ -83,10 +84,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.rx3.await
@@ -444,14 +443,14 @@ class OmnipodDashPumpPlugin @Inject constructor(
                     NotificationId.FAILED_UPDATE_PROFILE,
                     rh.gs(R.string.failed_to_set_the_new_basal_profile),
                     app.aaps.core.ui.R.raw.boluserror,
-                    level = NotificationLevel.URGENT
+                    level = NotificationLevel.IMPORTANT
                 )
             } else {
                 showNotification(
                     NotificationId.FAILED_UPDATE_PROFILE,
                     rh.gs(R.string.setting_basal_profile_might_have_failed),
                     app.aaps.core.ui.R.raw.boluserror,
-                    level = NotificationLevel.URGENT
+                    level = NotificationLevel.IMPORTANT
                 )
             }
             Completable.error(java.lang.IllegalStateException("Command not confirmed"))
@@ -484,7 +483,7 @@ class OmnipodDashPumpPlugin @Inject constructor(
                     NotificationId.FAILED_UPDATE_PROFILE,
                     rh.gs(R.string.suspend_delivery_is_unconfirmed),
                     app.aaps.core.ui.R.raw.boluserror,
-                    level = NotificationLevel.URGENT
+                    level = NotificationLevel.IMPORTANT
                 )
             }
     }
@@ -502,7 +501,7 @@ class OmnipodDashPumpPlugin @Inject constructor(
             preferences.observe(OmnipodIntPreferenceKey.ExpirationAlarmHours).drop(1).map {},
             preferences.observe(OmnipodBooleanPreferenceKey.LowReservoirAlert).drop(1).map {},
             preferences.observe(OmnipodIntPreferenceKey.LowReservoirAlertUnits).drop(1).map {},
-        ).onEach { commandQueue.customCommand(CommandUpdateAlertConfiguration()) }.launchIn(newScope)
+        ).collectResilient(newScope, aapsLogger, LTag.PUMP) { commandQueue.customCommand(CommandUpdateAlertConfiguration()) }
     }
 
     override suspend fun onStop() {
@@ -1016,7 +1015,7 @@ class OmnipodDashPumpPlugin @Inject constructor(
         }.toPumpEnactResultImpl()
     }
 
-    private fun notifyOnUnconfirmed(notificationId: NotificationId, msg: String, sound: Int?, level: NotificationLevel = NotificationLevel.URGENT) {
+    private fun notifyOnUnconfirmed(notificationId: NotificationId, msg: String, sound: Int?, level: NotificationLevel = NotificationLevel.IMPORTANT) {
         if (podStateManager.activeCommand != null) {
             aapsLogger.debug(LTag.PUMP, "Notification for active command: ${podStateManager.activeCommand}")
             showNotification(notificationId, msg, sound, level = level)
@@ -1133,7 +1132,7 @@ class OmnipodDashPumpPlugin @Inject constructor(
                     NotificationId.FAILED_UPDATE_PROFILE,
                     rh.gs(R.string.unconfirmed_resumedelivery_command_please_refresh_pod_status),
                     app.aaps.core.ui.R.raw.boluserror,
-                    level = NotificationLevel.URGENT
+                    level = NotificationLevel.IMPORTANT
                 )
             }.toPumpEnactResultImpl()
         } ?: pumpEnactResultProvider.get().success(false).enacted(false).comment("No profile active") // TODO i18n

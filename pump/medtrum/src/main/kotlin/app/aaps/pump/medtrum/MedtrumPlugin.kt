@@ -15,7 +15,6 @@ import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.notifications.NotificationId
-import app.aaps.core.interfaces.notifications.NotificationLevel
 import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.plugin.PluginDescription
 import app.aaps.core.interfaces.protection.ProtectionCheck
@@ -37,6 +36,7 @@ import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.AapsSchedulers
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventAppExit
 import app.aaps.core.interfaces.rx.events.EventShowSnackbar
 import app.aaps.core.interfaces.ui.UiInteraction
@@ -67,8 +67,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -133,9 +131,9 @@ class MedtrumPlugin @Inject constructor(
             .subscribe({ context.unbindService(mConnection) }, fabricPrivacy::logException)
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
-        preferences.observe(MedtrumStringNonKey.SnInput).drop(1).onEach {
+        preferences.observe(MedtrumStringNonKey.SnInput).drop(1).collectResilient(newScope, aapsLogger, LTag.PUMP) {
             updateMaxInsulinLimitsForPumpType()
-        }.launchIn(newScope)
+        }
 
         // Force enable pump unreachable alert due to some failure modes of Medtrum pump
         preferences.put(BooleanKey.AlertPumpUnreachable, true)
@@ -251,7 +249,7 @@ class MedtrumPlugin @Inject constructor(
             notificationManager.post(NotificationId.PROFILE_SET_OK, app.aaps.core.ui.R.string.profile_set_ok, validMinutes = 60)
             pumpEnactResultProvider.get().success(true).enacted(true)
         } else {
-            notificationManager.post(NotificationId.FAILED_UPDATE_PROFILE, app.aaps.core.ui.R.string.failed_update_basal_profile, level = NotificationLevel.URGENT)
+            notificationManager.post(NotificationId.FAILED_UPDATE_PROFILE, app.aaps.core.ui.R.string.failed_update_basal_profile)
             pumpEnactResultProvider.get()
         }
     }
