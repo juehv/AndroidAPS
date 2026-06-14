@@ -2,6 +2,7 @@ package app.aaps.pump.danar.comm
 
 import app.aaps.core.interfaces.configuration.ConfigBuilder
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
+import app.aaps.core.interfaces.pump.BolusProgressData
 import app.aaps.core.interfaces.pump.DetailedBolusInfoStorage
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.queue.CommandQueue
@@ -12,6 +13,8 @@ import app.aaps.pump.danar.DanaRPlugin
 import app.aaps.pump.danarkorean.DanaRKoreanPlugin
 import app.aaps.pump.danarv2.DanaRv2Plugin
 import app.aaps.shared.tests.TestBaseWithProfile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.jupiter.api.BeforeEach
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.anyBoolean
@@ -33,13 +36,14 @@ open class DanaRTestBase : TestBaseWithProfile() {
     @Mock lateinit var danaHistoryRecordDao: DanaHistoryRecordDao
     @Mock lateinit var uiInteraction: UiInteraction
 
+    private val testScope = CoroutineScope(Dispatchers.Unconfined)
+    val bolusProgressData by lazy { BolusProgressData(ch, rh, testScope) }
+
     @BeforeEach
     fun setup() {
         danaPump = DanaPump(aapsLogger, preferences, dateUtil, decimalFormatter, profileStoreProvider)
         doNothing().whenever(danaRKoreanPlugin).setPluginEnabledBlocking(anyOrNull(), anyBoolean())
         doNothing().whenever(danaRPlugin).setPluginEnabledBlocking(anyOrNull(), anyBoolean())
-        doNothing().whenever(danaRKoreanPlugin).setFragmentVisible(anyOrNull(), anyBoolean())
-        doNothing().whenever(danaRPlugin).setFragmentVisible(anyOrNull(), anyBoolean())
         whenever(rh.gs(ArgumentMatchers.anyInt())).thenReturn("")
     }
 
@@ -62,6 +66,10 @@ open class DanaRTestBase : TestBaseWithProfile() {
                 it.pumpSync = pumpSync
                 it.danaHistoryRecordDao = danaHistoryRecordDao
                 it.uiInteraction = uiInteraction
+                it.notificationManager = notificationManager
+                it.ch = ch
+                it.bolusProgressData = bolusProgressData
+                it.appScope = testScope
             }
         }
     }

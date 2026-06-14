@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.db.ProcessedTbrEbData
+import app.aaps.core.interfaces.di.ApplicationScope
 import app.aaps.core.interfaces.iob.IobCobCalculator
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
@@ -27,7 +28,9 @@ import app.aaps.core.keys.UnitDoubleKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.extensions.convertedToPercent
 import io.reactivex.rxjava3.disposables.CompositeDisposable
-import io.reactivex.rxjava3.kotlin.plusAssign
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.time.Clock
 import java.time.Instant
 import javax.inject.Inject
@@ -48,7 +51,8 @@ class LoopHubImpl @Inject constructor(
     private val persistenceLayer: PersistenceLayer,
     private val userEntryLogger: UserEntryLogger,
     private val preferences: Preferences,
-    private val processedTbrEbData: ProcessedTbrEbData
+    private val processedTbrEbData: ProcessedTbrEbData,
+    @ApplicationScope private val appScope: CoroutineScope
 ) : LoopHub {
 
     val disposable = CompositeDisposable()
@@ -57,11 +61,11 @@ class LoopHubImpl @Inject constructor(
     var clock: Clock = Clock.systemUTC()
 
     /** Returns the active insulin profile. */
-    override val currentProfile: Profile? get() = profileFunction.getProfile()
+    override val currentProfile: Profile? get() = runBlocking { profileFunction.getProfile() }
 
     /** Returns the name of the active insulin profile. */
     override val currentProfileName: String
-        get() = profileFunction.getProfileName()
+        get() = runBlocking { profileFunction.getProfileName() }
 
     /** Returns the glucose unit (mg/dl or mmol/l) as selected by the user. */
     override val glucoseUnit: GlucoseUnit
@@ -69,23 +73,23 @@ class LoopHubImpl @Inject constructor(
 
     /** Returns the remaining bolus insulin on board. */
     override val insulinOnboard: Double
-        get() = iobCobCalculator.calculateIobFromBolus().iob
+        get() = runBlocking { iobCobCalculator.calculateIobFromBolus() }.iob
 
     /** Returns the remaining bolus and basal insulin on board. */
     override val insulinBasalOnboard: Double
-        get() = iobCobCalculator.calculateIobFromTempBasalsIncludingConvertedExtended().basaliob
+        get() = runBlocking { iobCobCalculator.calculateIobFromTempBasalsIncludingConvertedExtended() }.basaliob
 
     /** Returns the remaining carbs on board. */
     override val carbsOnboard: Double?
-        get() = iobCobCalculator.getCobInfo("LoopHubImpl").displayCob
+        get() = runBlocking { iobCobCalculator.getCobInfo("LoopHubImpl") }.displayCob
 
     /** Returns true if the pump is connected. */
-    override val isConnected: Boolean get() = loop.runningMode != RM.Mode.DISCONNECTED_PUMP
+    override val isConnected: Boolean get() = runBlocking { loop.runningMode() } != RM.Mode.DISCONNECTED_PUMP
 
     /** Returns true if the current profile is set of a limited amount of time. */
     override val isTemporaryProfile: Boolean
         get() {
-            val ps = persistenceLayer.getEffectiveProfileSwitchActiveAt(clock.millis())
+            val ps = runBlocking { persistenceLayer.getEffectiveProfileSwitchActiveAt(clock.millis()) }
             return ps != null && ps.originalDuration > 0
         }
 
@@ -93,7 +97,7 @@ class LoopHubImpl @Inject constructor(
     override val temporaryBasal: Double
         get() {
             return currentProfile?.let {
-                val tb = processedTbrEbData.getTempBasalIncludingConvertedExtended(clock.millis())
+                val tb = runBlocking { processedTbrEbData.getTempBasalIncludingConvertedExtended(clock.millis()) }
                 tb?.convertedToPercent(clock.millis(), it)?.div(100.0)
             } ?: Double.NaN
         }
@@ -110,29 +114,32 @@ class LoopHubImpl @Inject constructor(
 
     /** Tells the loop algorithm that the pump is physically connected. */
     override fun connectPump() {
-        disposable += persistenceLayer.cancelCurrentRunningMode(clock.millis(), Action.RECONNECT, Sources.Garmin).subscribe()
-        commandQueue.cancelTempBasal(enforceNew = true, callback = null)
+        appScope.launch {
+            persistenceLayer.cancelCurrentRunningMode(clock.millis(), Action.RECONNECT, Sources.Garmin)
+            commandQueue.cancelTempBasal(enforceNew = true)
+        }
     }
 
     /** Tells the loop algorithm that the pump will be physically disconnected
      *  for the given number of minutes. */
     override fun disconnectPump(minutes: Int) {
         currentProfile?.let { p ->
-            loop.handleRunningModeChange(
-                durationInMinutes = minutes,
-                profile = p,
-                newRM = RM.Mode.DISCONNECTED_PUMP,
-                action = Action.DISCONNECT,
-                source = Sources.Garmin,
-                listValues = listOf(ValueWithUnit.Minute(minutes))
-            )
+            appScope.launch {
+                loop.handleRunningModeChange(
+                    durationInMinutes = minutes,
+                    profile = p,
+                    newRM = RM.Mode.DISCONNECTED_PUMP,
+                    action = Action.DISCONNECT,
+                    source = Sources.Garmin,
+                    listValues = listOf(ValueWithUnit.Minute(minutes))
+                )
+            }
         }
     }
 
     /** Retrieves the glucose values starting at from. */
-    override fun getGlucoseValues(from: Instant, ascending: Boolean): List<GV> {
-        return persistenceLayer.getBgReadingsDataFromTime(from.toEpochMilli(), ascending)
-            .blockingGet()
+    override fun getGlucoseValues(from: Instant, ascending: Boolean): List<GV> = runBlocking {
+        persistenceLayer.getBgReadingsDataFromTime(from.toEpochMilli(), ascending)
     }
 
     /** Notifies the system that carbs were eaten and stores the value. */
@@ -150,7 +157,9 @@ class LoopHubImpl @Inject constructor(
             eventType = TE.Type.CARBS_CORRECTION
             carbs = carbsAfterConstraints.toDouble()
         }
-        commandQueue.bolus(detailedBolusInfo, null)
+        appScope.launch {
+            commandQueue.bolus(detailedBolusInfo)
+        }
     }
 
     /** Stores hear rate readings that a taken and averaged of the given interval. */
@@ -166,6 +175,8 @@ class LoopHubImpl @Inject constructor(
             beatsPerMinute = avgHeartRate.toDouble(),
             device = device ?: "Garmin",
         )
-        disposable += persistenceLayer.insertOrUpdateHeartRate(hr).subscribe()
+        appScope.launch {
+            persistenceLayer.insertOrUpdateHeartRates(listOf(hr))
+        }
     }
 }

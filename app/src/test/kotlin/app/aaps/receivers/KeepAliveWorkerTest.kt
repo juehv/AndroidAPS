@@ -10,16 +10,16 @@ import app.aaps.core.interfaces.alerts.LocalAlertUtils
 import app.aaps.core.interfaces.aps.AutosensDataStore
 import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.maintenance.Maintenance
 import app.aaps.core.interfaces.queue.Command
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.interfaces.rx.events.EventProfileSwitchChanged
+import app.aaps.core.interfaces.rx.events.EventProfileChangeRequested
 import app.aaps.core.keys.LongNonKey
-import app.aaps.plugins.configuration.maintenance.MaintenancePlugin
 import app.aaps.plugins.constraints.dstHelper.DstHelperPlugin
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.util.concurrent.ListenableFuture
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
@@ -34,7 +34,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
     private lateinit var worker: KeepAliveWorker
 
     @Mock private lateinit var loop: Loop
-    @Mock private lateinit var maintenancePlugin: MaintenancePlugin
+    @Mock private lateinit var maintenance: Maintenance
     @Mock private lateinit var dstHelperPlugin: DstHelperPlugin
     @Mock private lateinit var workerParameters: WorkerParameters
     @Mock private lateinit var persistenceLayer: PersistenceLayer
@@ -52,37 +52,44 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(workManager.getWorkInfos(any())).thenReturn(listenableFuture)
         whenever(listenableFuture.get()).thenReturn(emptyList())
         whenever(workerParameters.inputData).thenReturn(workDataOf("schedule" to "KA_5"))
+        // Short-circuit Config.awaitInitialized() so doWorkAndLog() proceeds past the init gate.
+        // Without this the suspend gate hits initProgressFlow (null on a fresh Mock) and NPEs.
+        whenever(config.appInitialized).thenReturn(true)
     }
 
-    // Helper to create the worker instance directly
+    // Helper to create the worker instance directly. Worker now uses constructor injection
+    // (@HiltWorker / @AssistedInject), so dependencies are passed as constructor arguments.
     private fun createWorker(): KeepAliveWorker =
-        KeepAliveWorker(context, workerParameters).also {
-            // Manually inject all mocks.
-            it.persistenceLayer = persistenceLayer
-            it.config = config
-            it.iobCobCalculator = iobCobCalculator
-            it.loop = loop
-            it.dateUtil = dateUtil
-            it.activePlugin = activePlugin
-            it.profileFunction = profileFunction
-            it.rxBus = mockedRxBus
-            it.commandQueue = commandQueue
-            it.maintenancePlugin = maintenancePlugin
-            it.preferences = preferences
-            it.dstHelperPlugin = dstHelperPlugin
-            it.aapsLogger = aapsLogger
-            it.localAlertUtils = localAlertUtils
-            it.workManager = workManager
-            it.rh = rh
-        }
+        KeepAliveWorker(
+            context = context,
+            params = workerParameters,
+            aapsLogger = aapsLogger,
+            fabricPrivacy = fabricPrivacy,
+            localAlertUtils = localAlertUtils,
+            persistenceLayer = persistenceLayer,
+            config = config,
+            iobCobCalculator = iobCobCalculator,
+            loop = loop,
+            dateUtil = dateUtil,
+            activePlugin = activePlugin,
+            profileFunction = profileFunction,
+            rxBus = mockedRxBus,
+            commandQueue = commandQueue,
+            maintenance = maintenance,
+            rh = rh,
+            preferences = preferences,
+            dstHelperPlugin = dstHelperPlugin,
+            workManager = workManager,
+            ch = ch
+        )
 
     @Test
-    fun `checkPump requests status when connection is outdated`() = runBlocking {
+    fun `checkPump requests status when connection is outdated`() = runTest {
         // Arrange
         worker = createWorker()
-        whenever(loop.runningMode).thenReturn(RM.Mode.OPEN_LOOP)
+        whenever(loop.runningMode()).thenReturn(RM.Mode.OPEN_LOOP)
         whenever(profileFunction.getRequestedProfile()).thenReturn(profileSwitch)
-        whenever(profileFunction.getProfile()).thenReturn(validProfile)
+        whenever(profileFunction.getProfile()).thenReturn(effectiveProfile)
         whenever(commandQueue.isRunning(Command.CommandType.BASAL_PROFILE)).thenReturn(true)
         testPumpPlugin.lastData = now - T.mins(20).msecs()
 
@@ -90,15 +97,14 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         worker.checkPump()
 
         // Assert
-        verify(commandQueue).readStatus(anyOrNull(), anyOrNull())
-        Unit
+        verify(commandQueue).readStatus(anyOrNull())
     }
 
     @Test
-    fun `checkPump sends profile switch event if profile is mismatched`() = runBlocking {
+    fun `checkPump sends profile switch event if profile is mismatched`() = runTest {
         // Arrange
         worker = createWorker()
-        whenever(loop.runningMode).thenReturn(RM.Mode.OPEN_LOOP)
+        whenever(loop.runningMode()).thenReturn(RM.Mode.OPEN_LOOP)
         whenever(profileFunction.getRequestedProfile()).thenReturn(profileSwitch)
         testPumpPlugin.isProfileSet = false
 
@@ -106,29 +112,29 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         worker.checkPump()
 
         // Assert
-        verify(mockedRxBus).send(any<EventProfileSwitchChanged>())
+        verify(mockedRxBus).send(any<EventProfileChangeRequested>())
     }
 
     @Test
-    fun `checkPump does nothing if mode is DISCONNECTED_PUMP`() = runBlocking {
+    fun `checkPump does nothing if mode is DISCONNECTED_PUMP`() = runTest {
         // Arrange
         worker = createWorker()
-        whenever(loop.runningMode).thenReturn(RM.Mode.DISCONNECTED_PUMP)
+        whenever(loop.runningMode()).thenReturn(RM.Mode.DISCONNECTED_PUMP)
         testPumpPlugin.lastData = now - T.mins(20).msecs()
 
         // Act
         worker.doWorkAndLog()
 
         // Assert
-        verify(commandQueue, never()).readStatus(any(), anyOrNull())
-        verify(mockedRxBus, never()).send(any<EventProfileSwitchChanged>())
+        verify(commandQueue, never()).readStatus(any())
+        verify(mockedRxBus, never()).send(any<EventProfileChangeRequested>())
     }
 
     @Test
-    fun `checkAPS schedules device status upload if BG is missing`() = runBlocking {
+    fun `checkAPS schedules device status upload if BG is missing`() = runTest {
         // Arrange
         worker = createWorker()
-        whenever(loop.runningMode).thenReturn(RM.Mode.CLOSED_LOOP)
+        whenever(loop.runningMode()).thenReturn(RM.Mode.CLOSED_LOOP)
         whenever(ads.actualBg()).thenReturn(null)
 
         // Act
@@ -139,7 +145,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
     }
 
     @Test
-    fun `databaseCleanup does NOT run if it was run less than a day ago`() = runBlocking {
+    fun `databaseCleanup does NOT run if it was run less than a day ago`() = runTest {
         // Arrange
         worker = createWorker()
         whenever(preferences.get(LongNonKey.LastCleanupRun)).thenReturn(now - T.hours(12).msecs())
@@ -149,6 +155,5 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
 
         // Assert
         verify(persistenceLayer, never()).cleanupDatabase(any(), any())
-        Unit
     }
 }

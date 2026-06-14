@@ -2,17 +2,18 @@ package app.aaps.pump.danarv2
 
 import app.aaps.core.data.plugin.PluginType
 import app.aaps.core.interfaces.constraints.ConstraintsChecker
+import app.aaps.core.interfaces.pump.BolusProgressData
 import app.aaps.core.interfaces.pump.DetailedBolusInfoStorage
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.pump.TemporaryBasalStorage
 import app.aaps.core.interfaces.queue.CommandQueue
-import app.aaps.core.interfaces.ui.UiInteraction
 import app.aaps.core.objects.constraints.ConstraintObject
 import app.aaps.pump.dana.DanaPump
 import app.aaps.pump.dana.database.DanaHistoryDatabase
-import app.aaps.pump.dana.keys.DanaStringKey
+import app.aaps.pump.dana.keys.DanaStringNonKey
 import app.aaps.shared.tests.TestBaseWithProfile
-import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -26,7 +27,6 @@ class DanaRv2PluginTest : TestBaseWithProfile() {
     @Mock lateinit var detailedBolusInfoStorage: DetailedBolusInfoStorage
     @Mock lateinit var temporaryBasalStorage: TemporaryBasalStorage
     @Mock lateinit var pumpSync: PumpSync
-    @Mock lateinit var uiInteraction: UiInteraction
     @Mock lateinit var danaHistoryDatabase: DanaHistoryDatabase
 
     lateinit var danaPump: DanaPump
@@ -35,8 +35,8 @@ class DanaRv2PluginTest : TestBaseWithProfile() {
 
     @BeforeEach
     fun prepareMocks() {
-        whenever(preferences.get(DanaStringKey.RName)).thenReturn("")
-        whenever(preferences.get(DanaStringKey.MacAddress)).thenReturn("")
+        whenever(preferences.get(DanaStringNonKey.RName)).thenReturn("")
+        whenever(preferences.get(DanaStringNonKey.MacAddress)).thenReturn("")
         whenever(rh.gs(app.aaps.core.ui.R.string.pumplimit)).thenReturn("pump limit")
         whenever(rh.gs(app.aaps.core.ui.R.string.itmustbepositivevalue)).thenReturn("it must be positive value")
         whenever(rh.gs(app.aaps.core.ui.R.string.limitingbasalratio)).thenReturn("Limiting max basal rate to %1\$.2f U/h because of %2\$s")
@@ -44,7 +44,7 @@ class DanaRv2PluginTest : TestBaseWithProfile() {
         danaPump = DanaPump(aapsLogger, preferences, dateUtil, decimalFormatter, profileStoreProvider)
         danaRv2Plugin = DanaRv2Plugin(
             aapsLogger, aapsSchedulers, rxBus, context, rh, constraintChecker, activePlugin, commandQueue, danaPump, detailedBolusInfoStorage,
-            temporaryBasalStorage, dateUtil, fabricPrivacy, pumpSync, preferences, uiInteraction, danaHistoryDatabase, decimalFormatter, pumpEnactResultProvider
+            temporaryBasalStorage, dateUtil, fabricPrivacy, pumpSync, preferences, config, notificationManager, danaHistoryDatabase, decimalFormatter, BolusProgressData(ch, rh, CoroutineScope(Dispatchers.Unconfined)), pumpEnactResultProvider
         )
     }
 
@@ -72,10 +72,4 @@ class DanaRv2PluginTest : TestBaseWithProfile() {
         Assertions.assertEquals("DanaRv2: Limiting max percent rate to 200% because of pump limit", c.getMostLimitedReasons())
     }
 
-    @Test
-    fun preferenceScreenTest() {
-        val screen = preferenceManager.createPreferenceScreen(context)
-        danaRv2Plugin.addPreferenceScreen(preferenceManager, screen, context, null)
-        assertThat(screen.preferenceCount).isGreaterThan(0)
-    }
 }

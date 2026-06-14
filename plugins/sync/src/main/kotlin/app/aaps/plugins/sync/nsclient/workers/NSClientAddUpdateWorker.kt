@@ -1,6 +1,7 @@
 package app.aaps.plugins.sync.nsclient.workers
 
 import android.content.Context
+import androidx.hilt.work.HiltWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import app.aaps.core.data.model.BCR
@@ -14,13 +15,16 @@ import app.aaps.core.data.model.TB
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.model.TT
 import app.aaps.core.interfaces.configuration.Config
+import app.aaps.core.interfaces.insulin.Insulin
+import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.nsclient.StoreDataForDb
 import app.aaps.core.interfaces.plugin.ActivePlugin
+import app.aaps.core.interfaces.profile.ProfileRepository
 import app.aaps.core.interfaces.profile.ProfileUtil
 import app.aaps.core.interfaces.pump.VirtualPump
-import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.workflow.LoggingWorker
@@ -30,22 +34,26 @@ import app.aaps.plugins.sync.nsclient.extensions.extendedBolusFromJson
 import app.aaps.plugins.sync.nsclient.extensions.fromJson
 import app.aaps.plugins.sync.nsclient.extensions.isEffectiveProfileSwitch
 import app.aaps.plugins.sync.nsclient.extensions.temporaryBasalFromJson
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
-import javax.inject.Inject
 
-class NSClientAddUpdateWorker(
-    context: Context,
-    params: WorkerParameters
-) : LoggingWorker(context, params, Dispatchers.Default) {
-
-    @Inject lateinit var dataWorkerStorage: DataWorkerStorage
-    @Inject lateinit var config: Config
-    @Inject lateinit var preferences: Preferences
-    @Inject lateinit var dateUtil: DateUtil
-    @Inject lateinit var activePlugin: ActivePlugin
-    @Inject lateinit var rxBus: RxBus
-    @Inject lateinit var storeDataForDb: StoreDataForDb
-    @Inject lateinit var profileUtil: ProfileUtil
+@HiltWorker
+class NSClientAddUpdateWorker @AssistedInject constructor(
+    @Assisted context: Context,
+    @Assisted params: WorkerParameters,
+    aapsLogger: AAPSLogger,
+    fabricPrivacy: FabricPrivacy,
+    private val dataWorkerStorage: DataWorkerStorage,
+    private val config: Config,
+    private val preferences: Preferences,
+    private val dateUtil: DateUtil,
+    private val activePlugin: ActivePlugin,
+    private val activeInsulin: Insulin,
+    private val profileRepository: ProfileRepository,
+    private val storeDataForDb: StoreDataForDb,
+    private val profileUtil: ProfileUtil
+) : LoggingWorker(context, params, Dispatchers.Default, aapsLogger, fabricPrivacy) {
 
     override suspend fun doWorkAndLog(): Result {
         val treatments = dataWorkerStorage.pickupJSONArray(inputData.getLong(DataWorkerStorage.STORE_KEY, -1))
@@ -72,7 +80,7 @@ class NSClientAddUpdateWorker(
                 latestDateInReceivedData = mills
 
             if (insulin > 0 && (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT)) {
-                BS.fromJson(json)?.let { bolus ->
+                BS.fromJson(json, activeInsulin)?.let { bolus ->
                     storeDataForDb.addToBoluses(bolus)
                 } ?: aapsLogger.error("Error parsing bolus json $json")
             }
@@ -90,7 +98,7 @@ class NSClientAddUpdateWorker(
                 json = ebJson
                 eventType = JsonHelper.safeGetString(json, "eventType")
 
-                activePlugin.activePump.let { if (it is VirtualPump) it.fakeDataDetected = true }
+                activePlugin.activePump.selectedActivePump().let { if (it is VirtualPump) it.fakeDataDetected = true }
             }
             when {
                 insulin > 0 || carbs > 0                                          -> Any()
@@ -103,7 +111,7 @@ class NSClientAddUpdateWorker(
 
                 eventType == TE.Type.NOTE.text && json.isEffectiveProfileSwitch() -> // replace this by new Type when available in NS
                     if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT) {
-                        EPS.fromJson(json, dateUtil)?.let { effectiveProfileSwitch ->
+                        EPS.fromJson(json, dateUtil, activeInsulin)?.let { effectiveProfileSwitch ->
                             storeDataForDb.addToEffectiveProfileSwitches(effectiveProfileSwitch)
                         } ?: aapsLogger.error("Error parsing EffectiveProfileSwitch json $json")
                     }
@@ -145,7 +153,7 @@ class NSClientAddUpdateWorker(
 
                 eventType == TE.Type.PROFILE_SWITCH.text                          ->
                     if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT) {
-                        PS.fromJson(json, dateUtil, activePlugin)?.let { profileSwitch ->
+                        PS.fromJson(json, dateUtil, profileRepository, activeInsulin)?.let { profileSwitch ->
                             storeDataForDb.addToProfileSwitches(profileSwitch)
                         } ?: aapsLogger.error("Error parsing ProfileSwitch json $json")
                     }
